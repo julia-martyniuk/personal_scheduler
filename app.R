@@ -54,7 +54,7 @@ ui <- navbarPage("Personal Scheduler",
                                  format = "yyyy-mm-dd"),
                        
                    actionButton("addbutton", "Add new deadline"),
-                   actionButton("savebutton", "Save Schedule")),
+                   actionButton("extractbutton", "Extract to csv")),
                    tags$hr(),
                    
                    div(h4("Change selected items"),
@@ -163,20 +163,20 @@ server<- function(input, output, session) {
                              WHERE is_deleted = 0')
   })
   
-  ## Update csv table ##
-  # observeEvent(input$savebutton,{
-  #   
-  #   print('Save Button clicked...')
-  #   
-  #   write.table(v$data, 
-  #               file = "current_deadlines.csv", 
-  #               sep = ",", 
-  #               append = FALSE, # file.exists("deadlines.csv"), 
-  #               quote = TRUE, 
-  #               col.names = colnames(v$data), # !file.exists("deadlines.csv"), 
-  #               row.names = FALSE)
-  #   
-  # })
+  # Extract schedule to csv file ##
+  observeEvent(input$extractbutton,{
+
+    print('Extract Button clicked...')
+
+    write.table(v$data,
+                file = "deadlines.csv",
+                sep = ",",
+                append = FALSE,
+                quote = TRUE,
+                col.names = colnames(v$data),
+                row.names = FALSE)
+
+  })
   
   ## Update deadline item ##
   observeEvent(input$updateselected, {
