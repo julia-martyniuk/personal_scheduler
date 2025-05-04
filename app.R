@@ -1,10 +1,18 @@
 # Load R packages 
 # install.packages("reactable")
+# install.packages("RSQLite")
 
 library(shiny)
 library(shinythemes)
 library(reactable)
 library(bslib)
+library(RSQLite)
+library(DBI)
+
+####################################
+# Connect database                #
+####################################
+db <- dbConnect(RSQLite::SQLite(), "scheduler.db")
 
 ####################################
 # Read the data                    #
@@ -33,16 +41,16 @@ ui <- navbarPage("Personal Scheduler",
             column(width = 3,
                    div(h4("Add new deadline"),
                        
-                   selectInput("subject", label = "Subject:", 
+                   selectInput("subject", label = "Subject", 
                                    choices = program$Course.name, 
                                    selected = NULL),
                        
-                   selectInput("task", label = "Task:", 
+                   selectInput("task", label = "Task", 
                                    choices = tasks, 
                                    selected = NULL),
                        
-                   dateInput("deadlinedate", 
-                                 label = "Deadline date:",
+                   dateInput("deadline_date", 
+                                 label = "Deadline date",
                                  format = "yyyy-mm-dd"),
                        
                    actionButton("addbutton", "Add new deadline"),
@@ -51,10 +59,10 @@ ui <- navbarPage("Personal Scheduler",
                    
                    div(h4("Change selected items"),
                        
-                   selectInput("cr_state", label = "Current state:", 
+                   selectInput("cr_state", label = "Current state", 
                                    choices = statuses, 
                                    selected = NULL),
-                   textInput("new_note", label = "Keep a note:"),
+                   textInput("new_note", label = "Keep a note"),
                        
                    actionButton("updateselected", "Update selected item"), 
                    actionButton("deletebutton", "Delete"))),
@@ -68,28 +76,29 @@ ui <- navbarPage("Personal Scheduler",
                  h2("Check your progress"),
                  fluidRow(
                    column(width = 3,
-                          div(h4("Check your progress"),
+                          div(h4("Filter by"),
                               
-                          selectInput("subject", label = "By subject:", 
+                          selectInput("subject", label = "Subject", 
                                           choices = program$Course.name, 
                                           selected = NULL),
                               
-                          selectInput("task", label = "By task:", 
+                          selectInput("task", label = "Task", 
                                           choices = tasks, 
                                           selected = NULL),
                           
-                          selectInput("state", label = "By state:", 
+                          selectInput("state", label = "State", 
                                       choices = statuses, 
                                       selected = NULL),
                               
-                          dateInput("month", label = "By month:",
+                          dateInput("month", label = "Month",
                                         format = "MM"),
-                          dateInput("date", label = "By date:",
+                          dateInput("date", label = "Date",
                                     format = "yyyy-mm-dd"),
                               
                           actionButton("applybutton", "Apply filters"),
                    
-                 )))
+                 )),
+                 column(width = 9,plotOutput("progress_plot")))
                  
                ))
   
@@ -105,30 +114,21 @@ server<- function(input, output, session) {
   
   ## Build a schedule ##
   v <- reactiveValues()
-  if (file.exists("deadlines.csv")) {
-    v$data <- read.csv("deadlines.csv")
-    # print(v$data)
-  }
-  else {
-    v$data <- data.frame(
-      subject = as.character(),
-      task = as.character(),
-      deadlinedate = as.Date(character()),
-      priority = as.integer(),
-      state = as.character(),
-      note = as.character(),
-      stringsAsFactors = FALSE)
-    # print(v$data)
-  }
+  v$data <- dbGetQuery(db, 'SELECT deadline_id, subject, task, deadline_date, priority, state, note
+                  FROM deadline
+                  WHERE is_deleted = 0')
+  sorted_by_deadlines <- reactive({
+    v$data[order(as.Date(v$data$deadline_date)), ]})
   
   selected <- reactive(getReactableState("new_deadline", "selected"))
+  print(selected)
   ## Add new deadline ##
   
   observeEvent(input$addbutton,{
     
     print('Add Button clicked...')
     
-    req(input$subject, input$task, input$deadlinedate)
+    req(input$subject, input$task, input$deadline_date)
     
     # Calculate priority #
     selected_subject <- program[program$Course.name == input$subject,]
@@ -141,34 +141,42 @@ server<- function(input, output, session) {
     new_entry <- data.frame(
       subject = input$subject,
       task = input$task,
-      deadlinedate = as.character(as.Date(input$deadlinedate)),
+      deadline_date = as.character(as.Date(input$deadline_date)),
       priority = priority_d,
       state = "new",
-      note = "write note",
+      note = "",
       stringsAsFactors = FALSE
     )
     
-    ## Delete entry ##
-    # observe(input$buttondelete, {})
-    
-    v$data <- rbind(v$data, new_entry)  
-    # print(v$data)
-    
+    dbExecute(db,'INSERT INTO deadline (subject, task,deadline_date, priority, state, note ) 
+               VALUES (?,?,?,?,?,?)',
+               params = list(
+                 new_entry$subject,
+                 new_entry$task,
+                 new_entry$deadline_date,
+                 new_entry$priority,
+                 new_entry$state,
+                 new_entry$note
+               ))
+    v$data <- dbGetQuery(db, 'SELECT deadline_id, subject, task, deadline_date, priority, state, note
+                             FROM deadline
+                             WHERE is_deleted = 0')
   })
   
   ## Update csv table ##
-  observeEvent(input$savebutton,{
-    
-    print('Save Button clicked...')
-    
-    write.table(v$data, 
-                file = "deadlines.csv", 
-                sep = ",", 
-                append = FALSE, # file.exists("deadlines.csv"), 
-                quote = TRUE, 
-                col.names = colnames(v$data), # !file.exists("deadlines.csv"), 
-                row.names = FALSE)
-  })
+  # observeEvent(input$savebutton,{
+  #   
+  #   print('Save Button clicked...')
+  #   
+  #   write.table(v$data, 
+  #               file = "current_deadlines.csv", 
+  #               sep = ",", 
+  #               append = FALSE, # file.exists("deadlines.csv"), 
+  #               quote = TRUE, 
+  #               col.names = colnames(v$data), # !file.exists("deadlines.csv"), 
+  #               row.names = FALSE)
+  #   
+  # })
   
   ## Update deadline item ##
   observeEvent(input$updateselected, {
@@ -179,11 +187,22 @@ server<- function(input, output, session) {
     
     selected_items <- selected()
     
-    if (length(selected_items) > 0) {
-      v$data[selected_items, "state"] <- input$cr_state
-      v$data[selected_items, "note"] <- input$new_note
-    }
+      if (length(selected_items) > 0) {
+        for (i in selected_items) {
+          row_id <- sorted_by_deadlines()[i, "deadline_id"]
+        
+        
+    dbExecute(db, 'UPDATE deadline 
+                    SET state = ?, note = ? 
+                    WHERE deadline_id = ?',
+                params = list(input$cr_state, input$new_note, row_id))}}
+    
+    v$data <- dbGetQuery(db, 'SELECT deadline_id, subject, task, deadline_date, priority, state, note
+                          FROM deadline
+                          WHERE is_deleted = 0')
   })
+  
+
   
   ## Delete items ##
   observeEvent(input$deletebutton, {
@@ -193,17 +212,25 @@ server<- function(input, output, session) {
     selected_items <- selected()
     
     if (length(selected_items) > 0) {
-      v$data <- v$data[-c(selected_items),]
-    }
+      for (i in selected_items) {
+        row_id <- sorted_by_deadlines()[i, "deadline_id"]
+        
+        
+    dbExecute(db, 'UPDATE deadline 
+                    SET is_deleted = TRUE 
+                    WHERE deadline_id = ?',
+                  params = list(row_id))}}
+    
+    v$data <- dbGetQuery(db, 'SELECT deadline_id, subject, task, deadline_date, priority, state, note
+                          FROM deadline
+                          WHERE is_deleted = 0')
+    
   })
   
   ## Render the table ##
   output$new_deadline <- renderReactable({
-    sorted_by_deadlines <- v$data[order(as.Date(v$data$deadlinedate)),]
     
-    # v$data$check <- sample(c(TRUE, FALSE), nrow(v$data), TRUE)
-    
-    reactable(sorted_by_deadlines, 
+    reactable(sorted_by_deadlines(), 
               striped = TRUE,
               highlight = TRUE,
               selection = "multiple",
@@ -217,7 +244,7 @@ server<- function(input, output, session) {
                 searchInputStyle = list(width = "100%")
               ),
               columns = list(
-                deadlinedate = colDef(
+                deadline_date = colDef(
                   defaultSortOrder = "desc",
                   style = function(value) {
                     if (as.Date(value) - Sys.Date() < 3) {
@@ -225,21 +252,26 @@ server<- function(input, output, session) {
                     else if (as.Date(value) - Sys.Date() < 7)  {
                       color <- "yellow"}
                     else {color <- NULL}
-                    list(background = color)})
+                    list(background = color)}),
+                deadline_id = colDef(show = FALSE)
                 
               )
     )
     
   }
   )
+  observe({
+    print(v$data)
+  })
   
-  # output$selected <- renderPrint({
-  #   print(selected())
-  # })
+  output$selected <- renderPrint({
+    print(selected())
+  })
   
   observe({
     print(v$data[selected(), ])
   })
+  
 } 
 
 ####################################
