@@ -1,10 +1,10 @@
 # Load R packages 
 # install.packages("reactable")
-# install.packages("reactable.extras")
+
 library(shiny)
 library(shinythemes)
 library(reactable)
-library(reactable.extras)
+library(bslib)
 
 ####################################
 # Read the data                    #
@@ -15,62 +15,86 @@ read_data <- function() {
     sprintf("%s - %s", program$Course.name, program$Course.type)
   program
 }
-
+  
 program <- read_data()
 
 statuses <- c("new", "in progress", "done", "cancelled")
+tasks <- c("programming task", "test", "project", "exam", "presentation", "task")
 
 ####################################
 # UI                               #
 ####################################
-ui <- fluidPage(
-  reactable_extras_dependency(),
-  theme = shinytheme("flatly"),
-  titlePanel('My deadlines'),
-  fluidRow(
-    column(width = 3,
-           div(h4("Add new deadline"),
-               
-               selectInput("subject", label = "Subject:", 
-                           choices = program$Course.name, 
-                           selected = NULL),
-               
-               selectInput("task", label = "Task:", 
-                           choices = list("programming task", 
-                                          "test", 
-                                          "project", 
-                                          "exam", 
-                                          "presentation", 
-                                          "task"), 
-                           selected = NULL),
-               
-               dateInput("deadlinedate", 
-                         label = "Deadline date:",
-                         format = "yyyy-mm-dd"),
-               
-               actionButton("addbutton", "Add new deadline"),
-               actionButton("savebutton", "Save Schedule")
-           ),
-           tags$hr(),
-           div(h4("Change selected items"),
-               
-               selectInput("cr_state", label = "Current state:", 
-                           choices = list("new", 
-                                          "in progress", 
-                                          "done", 
-                                          "cancelled"), 
-                           selected = NULL),
-               textInput("new_note", label = "Keep a note:"),
-               
-               actionButton("updateselected", "Update selected item"), 
-               actionButton("deletebutton", "Delete"))
-    ),
-    
-    column(width = 9,reactableOutput("new_deadline")),
-    verbatimTextOutput("selected")
-    
+ui <- navbarPage("Personal Scheduler",
+       tabPanel("Current Schedule",          
+        fluidPage(
+          theme = shinytheme("flatly"),
+          h2('My deadlines'),
+          fluidRow(
+            column(width = 3,
+                   div(h4("Add new deadline"),
+                       
+                   selectInput("subject", label = "Subject:", 
+                                   choices = program$Course.name, 
+                                   selected = NULL),
+                       
+                   selectInput("task", label = "Task:", 
+                                   choices = tasks, 
+                                   selected = NULL),
+                       
+                   dateInput("deadlinedate", 
+                                 label = "Deadline date:",
+                                 format = "yyyy-mm-dd"),
+                       
+                   actionButton("addbutton", "Add new deadline"),
+                   actionButton("savebutton", "Save Schedule")),
+                   tags$hr(),
+                   
+                   div(h4("Change selected items"),
+                       
+                   selectInput("cr_state", label = "Current state:", 
+                                   choices = statuses, 
+                                   selected = NULL),
+                   textInput("new_note", label = "Keep a note:"),
+                       
+                   actionButton("updateselected", "Update selected item"), 
+                   actionButton("deletebutton", "Delete"))),
+            
+            column(width = 9,reactableOutput("new_deadline")),
+            verbatimTextOutput("selected")
+  ))),
+      tabPanel("Progress",
+               fluidPage(
+                 theme = shinytheme("flatly"),
+                 h2("Check your progress"),
+                 fluidRow(
+                   column(width = 3,
+                          div(h4("Check your progress"),
+                              
+                          selectInput("subject", label = "By subject:", 
+                                          choices = program$Course.name, 
+                                          selected = NULL),
+                              
+                          selectInput("task", label = "By task:", 
+                                          choices = tasks, 
+                                          selected = NULL),
+                          
+                          selectInput("state", label = "By state:", 
+                                      choices = statuses, 
+                                      selected = NULL),
+                              
+                          dateInput("month", label = "By month:",
+                                        format = "MM"),
+                          dateInput("date", label = "By date:",
+                                    format = "yyyy-mm-dd"),
+                              
+                          actionButton("applybutton", "Apply filters"),
+                   
+                 )))
+                 
+               ))
+  
     # mainPanel(reactableOutput("new_deadline"),verbatimTextOutput("selected")),
-  )
+  
 )
 
 ####################################
@@ -209,9 +233,9 @@ server<- function(input, output, session) {
   }
   )
   
-  output$selected <- renderPrint({
-    print(selected())
-  })
+  # output$selected <- renderPrint({
+  #   print(selected())
+  # })
   
   observe({
     print(v$data[selected(), ])
