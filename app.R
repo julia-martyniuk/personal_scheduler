@@ -8,6 +8,9 @@ library(reactable)
 library(bslib)
 library(RSQLite)
 library(DBI)
+library(dplyr)
+library(ggplot2)
+
 
 ####################################
 # Connect database                #
@@ -80,29 +83,27 @@ ui <- navbarPage("Personal Scheduler",
                               
                           selectInput("subject", label = "Subject", 
                                           choices = program$Course.name, 
-                                          selected = NULL),
+                                          selected = NULL,
+                                          multiple = TRUE),
                               
                           selectInput("task", label = "Task", 
                                           choices = tasks, 
-                                          selected = NULL),
+                                          selected = NULL,
+                                          multiple = TRUE),
                           
                           selectInput("state", label = "State", 
                                       choices = statuses, 
-                                      selected = NULL),
+                                      selected = NULL,
+                                      multiple = TRUE),
                               
                           dateInput("month", label = "Month",
-                                        format = "MM"),
-                          dateInput("date", label = "Date",
-                                    format = "yyyy-mm-dd"),
-                              
-                          actionButton("applybutton", "Apply filters"),
-                   
+                                        format = "MM")
+                          # dateInput("date", label = "Date",
+                          #           format = "yyyy-mm-dd"),
                  )),
                  column(width = 9,plotOutput("progress_plot")))
                  
                ))
-  
-    # mainPanel(reactableOutput("new_deadline"),verbatimTextOutput("selected")),
   
 )
 
@@ -114,14 +115,15 @@ server<- function(input, output, session) {
   
   ## Build a schedule ##
   v <- reactiveValues()
+  
   v$data <- dbGetQuery(db, 'SELECT deadline_id, subject, task, deadline_date, priority, state, note
                   FROM deadline
                   WHERE is_deleted = 0')
-  sorted_by_deadlines <- reactive({
-    v$data[order(as.Date(v$data$deadline_date)), ]})
+  
+  sorted_by_deadlines <- reactive({v$data[order(as.Date(v$data$deadline_date)),]})
   
   selected <- reactive(getReactableState("new_deadline", "selected"))
-  print(selected)
+
   ## Add new deadline ##
   
   observeEvent(input$addbutton,{
@@ -149,7 +151,7 @@ server<- function(input, output, session) {
     )
     
     dbExecute(db,'INSERT INTO deadline (subject, task,deadline_date, priority, state, note ) 
-               VALUES (?,?,?,?,?,?)',
+                  VALUES (?,?,?,?,?,?)',
                params = list(
                  new_entry$subject,
                  new_entry$task,
@@ -158,12 +160,13 @@ server<- function(input, output, session) {
                  new_entry$state,
                  new_entry$note
                ))
+    
     v$data <- dbGetQuery(db, 'SELECT deadline_id, subject, task, deadline_date, priority, state, note
-                             FROM deadline
-                             WHERE is_deleted = 0')
+                              FROM deadline
+                              WHERE is_deleted = 0')
   })
   
-  # Extract schedule to csv file ##
+  ## Extract schedule to csv file ##
   observeEvent(input$extractbutton,{
 
     print('Extract Button clicked...')
@@ -192,14 +195,14 @@ server<- function(input, output, session) {
           row_id <- sorted_by_deadlines()[i, "deadline_id"]
         
         
-    dbExecute(db, 'UPDATE deadline 
-                    SET state = ?, note = ? 
-                    WHERE deadline_id = ?',
-                params = list(input$cr_state, input$new_note, row_id))}}
+          dbExecute(db, 'UPDATE deadline 
+                         SET state = ?, note = ? 
+                         WHERE deadline_id = ?',
+                         params = list(input$cr_state, input$new_note, row_id))}}
     
     v$data <- dbGetQuery(db, 'SELECT deadline_id, subject, task, deadline_date, priority, state, note
-                          FROM deadline
-                          WHERE is_deleted = 0')
+                              FROM deadline
+                              WHERE is_deleted = 0')
   })
   
 
@@ -217,17 +220,17 @@ server<- function(input, output, session) {
         
         
     dbExecute(db, 'UPDATE deadline 
-                    SET is_deleted = TRUE 
-                    WHERE deadline_id = ?',
+                   SET is_deleted = TRUE 
+                   WHERE deadline_id = ?',
                   params = list(row_id))}}
     
     v$data <- dbGetQuery(db, 'SELECT deadline_id, subject, task, deadline_date, priority, state, note
-                          FROM deadline
-                          WHERE is_deleted = 0')
+                              FROM deadline
+                              WHERE is_deleted = 0')
     
   })
   
-  ## Render the table ##
+  ## Render table ##
   output$new_deadline <- renderReactable({
     
     reactable(sorted_by_deadlines(), 
@@ -241,8 +244,7 @@ server<- function(input, output, session) {
                 highlightColor = "cornsilk",
                 cellPadding = "8px 12px",
                 style = list(fontFamily = "-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif"),
-                searchInputStyle = list(width = "100%")
-              ),
+                searchInputStyle = list(width = "100%")),
               columns = list(
                 deadline_date = colDef(
                   defaultSortOrder = "desc",
@@ -253,26 +255,76 @@ server<- function(input, output, session) {
                       color <- "yellow"}
                     else {color <- NULL}
                     list(background = color)}),
-                deadline_id = colDef(show = FALSE)
-                
-              )
+                deadline_id = colDef(show = FALSE))
     )
+  })
+  
+  ## Filter data for plot ##
+
+  all_deadlines <- reactive({dbGetQuery(db, 'SELECT deadline_id, subject, task, deadline_date, priority, state, note
+                                       FROM deadline')
+  })
+  
+  filtered_deadlines <- reactive({
+    req(all_deadlines)
+    df_plot <- all_deadlines()
+  
+    df_plot$deadline_date <- as.Date(df_plot$deadline_date)
+    df_plot$month <- format(df_plot$deadline_date, "%b")
+  
+    # cat("Original row count:", nrow(df_plot), "\n")
+  
+    if (!is.null(input$subject) && length(input$subject) > 0) {
+      df_plot <- df_plot[df_plot$subject %in% input$subject, ]
+      # cat("After subject filter:", nrow(df_plot), "\n")
+    }
+    if (!is.null(input$task) && length(input$task) > 0) {
+      df_plot <- df_plot[df_plot$task %in% input$task, ]
+      # cat("After task filter:", nrow(df_plot), "\n")
+    }
+    if (!is.null(input$state) && length(input$state) > 0) {
+      df_plot <- df_plot[df_plot$state %in% input$state, ]
+      # cat("After state filter:", nrow(df_plot), "\n")
+    }
+    df_plot
+    })
     
-  }
-  )
-  observe({
-    print(v$data)
-  })
+  ## Render plot ##
+  output$progress_plot <- renderPlot({
+    df_plot <- filtered_deadlines()
+    
+    if (nrow(df_plot) == 0) {
+      return(NULL)}
+    
+    df_plot$state <- as.character(df_plot$state)
+    df_plot$month <- factor(df_plot$month, levels = month.abb)
+    
+    df_summary <- df_plot %>%
+      group_by(month,state) %>%
+      summarise(task_count = n(), .groups = "drop")
+    
+    ggplot(df_summary, aes(x = month, y = task_count, fill = state)) +
+      geom_bar(stat = "identity", position = "stack") +
+      labs(title = "Task Count by State", x = "Month", y = "Number of Tasks") +
+      theme_minimal()
+    })
+}
+
   
-  output$selected <- renderPrint({
-    print(selected())
-  })
+  # Test outputs and button behavior 
+  # observe({
+  #   print(v$data)
+  # })
+  # 
+  # output$selected <- renderPrint({
+  #   print(selected())
+  # })
+  # 
+  # observe({
+  #   print(v$data[selected(), ])
+  # })
   
-  observe({
-    print(v$data[selected(), ])
-  })
-  
-} 
+
 
 ####################################
 # Create the shiny app             #
