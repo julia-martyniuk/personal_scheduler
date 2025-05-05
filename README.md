@@ -7,7 +7,8 @@ This Shiny app allows students to manage their subjects' deadlines interactively
 - Add new deadlines with subject, task type, date, and auto-assigned priority;
 - Update status and notes for selected tasks;
 - Delete selected deadline entries;
-- Save and load your schedule from a local `.csv` file
+- Save your current schedule locally to `.csv` file
+- Check your progress 
 
 # Requirements
 
@@ -16,9 +17,13 @@ This Shiny app allows students to manage their subjects' deadlines interactively
   - `shiny`
   - `shinythemes`
   - `reactable`
-  - `reactable.extras`
+  - `bslib`
+  - `RSQLite`
+  - `DBI`
+  - `dplyr`
+  - `ggplot2`
 
 Install required packages:
 
 ```r
-install.packages(c("shiny", "shinythemes", "reactable", "reactable.extras"))
+install.packages(c("shiny", "shinythemes", "reactable", "RSQLite""))
