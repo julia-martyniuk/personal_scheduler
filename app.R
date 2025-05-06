@@ -12,6 +12,7 @@ library(dplyr)
 library(ggplot2)
 
 print("It is a test branch")
+print("It is a second test")
 
 ####################################
 # Connect database                #
