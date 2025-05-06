@@ -11,6 +11,7 @@ library(DBI)
 library(dplyr)
 library(ggplot2)
 
+print("It is a test branch")
 
 ####################################
 # Connect database                #
