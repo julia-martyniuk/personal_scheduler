@@ -289,26 +289,56 @@ server<- function(input, output, session) {
   })
   
   ## Delete items ##
+  # observeEvent(input$deletebutton, {
+  #   
+  #   print('Delete button clicked...')
+  #   
+  #   selected_items <- selected()
+  #   
+  #   if (length(selected_items) > 0) {
+  #     for (i in selected_items) {
+  #       row_id <- sorted_by_deadlines()[i, "deadline_id"]
+  #       
+  #       
+  #   dbExecute(db, 'UPDATE deadline 
+  #                  SET is_deleted = TRUE 
+  #                  WHERE deadline_id = ?',
+  #                 params = list(row_id))}}
+  #   
+  #   v$data <- dbGetQuery(db, 'SELECT deadline_id, subject, task, deadline_date, priority, state, note
+  #                             FROM deadline
+  #                             WHERE is_deleted = 0')
+  #   
+  # })
+  
   observeEvent(input$deletebutton, {
     
     print('Delete button clicked...')
     
-    selected_items <- selected()
+    # 1. collect all selected IDs at once
+    ids <- sorted_by_deadlines()$deadline_id[selected()]
     
-    if (length(selected_items) > 0) {
-      for (i in selected_items) {
-        row_id <- sorted_by_deadlines()[i, "deadline_id"]
-        
-        
-    dbExecute(db, 'UPDATE deadline 
-                   SET is_deleted = TRUE 
-                   WHERE deadline_id = ?',
-                  params = list(row_id))}}
+    # 2. if any, do one-shot UPDATE … IN (…)
+    if (length(ids)) {
+      ph     <- paste(rep("?", length(ids)), collapse = ",")
+      params <- as.list(ids)
+      dbExecute(
+        db,
+        sprintf(
+          "UPDATE deadline
+            SET is_deleted = TRUE
+          WHERE deadline_id IN (%s)",
+          ph
+        ),
+        params = params
+      )
+    }
     
-    v$data <- dbGetQuery(db, 'SELECT deadline_id, subject, task, deadline_date, priority, state, note
-                              FROM deadline
-                              WHERE is_deleted = 0')
-    
+    v$data <- dbGetQuery(db, '
+    SELECT deadline_id, subject, task, deadline_date, priority, state, note
+      FROM deadline
+     WHERE is_deleted = 0
+  ')
   })
   
   ## Render table ##
