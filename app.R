@@ -11,81 +11,8 @@ library(DBI)
 library(dplyr)
 library(ggplot2)
 
-# ---- S3 “Deadline” class definitions begin here ----
-
-Deadline <- function(subject, task, deadline_date, priority,
-                     state = "new", note = "") {
-  stopifnot(
-    is.character(subject), length(subject) == 1,
-    is.character(task),    length(task)    == 1,
-    inherits(as.Date(deadline_date), "Date"),
-    is.numeric(priority),  length(priority) == 1,
-    state %in% c("new","in progress","done","cancelled")
-  )
-  structure(
-    list(
-      subject       = subject,
-      task          = task,
-      deadline_date = as.Date(deadline_date),
-      priority      = priority,
-      state         = state,
-      note          = note
-    ),
-    class = "Deadline"
-  )
-}
-
-# ---- S3 definitions end here ----
-# ---- S3 “Deadline” methods ----
-
-print.Deadline <- function(x, ...) {
-  cat(
-    sprintf(
-      "<Deadline> %s — %s\n  Due: %s | Prio: %d | State: %s\n  Note: %s\n",
-      x$subject, x$task,
-      format(x$deadline_date), x$priority, x$state,
-      ifelse(x$note == "", "<none>", x$note)
-    )
-  )
-}
-
-as.data.frame.Deadline <- function(x, ...) {
-  data.frame(
-    subject       = x$subject,
-    task          = x$task,
-    deadline_date = as.character(x$deadline_date),
-    priority      = x$priority,
-    state         = x$state,
-    note          = x$note,
-    stringsAsFactors = FALSE
-  )
-}
-
-# ---- end S3 methods ----
-# ---- begin S3: urgency ----
-
-
-urgency <- function(x) UseMethod("urgency")
-
-# for a single Deadline, returns (deadline_date − today)
-urgency.Deadline <- function(x) {
-  as.numeric(x$deadline_date - Sys.Date())
-}
-
-# ---- end S3: urgency ----
-
-# ---- begin S3: setState ----
-
-setState <- function(x, state, note) UseMethod("setState")
-
-setState.Deadline <- function(x, state, note = "") {
-  x$state <- state
-  x$note  <- note
-  x
-}
-
-# ---- end S3: setState ----
-
+print("It is a test branch")
+print("It is a second test")
 
 ####################################
 # Connect database                #
@@ -195,11 +122,7 @@ server<- function(input, output, session) {
                   FROM deadline
                   WHERE is_deleted = 0')
   
-  sorted_by_deadlines <- reactive({
-    v$data %>%
-      mutate(deadline_date = as.Date(deadline_date)) %>%
-      arrange(deadline_date)
-  })
+  sorted_by_deadlines <- reactive({v$data[order(as.Date(v$data$deadline_date)),]})
   
   selected <- reactive(getReactableState("new_deadline", "selected"))
 
@@ -219,26 +142,31 @@ server<- function(input, output, session) {
     else if (ects < 5) {2}
     else {1}
     
-    dl <- Deadline(
-      subject       = input$subject,
-      task          = input$task,
-      deadline_date = input$deadline_date,
-      priority      = priority_d
+    new_entry <- data.frame(
+      subject = input$subject,
+      task = input$task,
+      deadline_date = as.character(as.Date(input$deadline_date)),
+      priority = priority_d,
+      state = "new",
+      note = "",
+      stringsAsFactors = FALSE
     )
-    new_entry <- as.data.frame.Deadline(dl)
     
-    dbExecute(
-      db,
-      'INSERT INTO deadline (subject, task, deadline_date, priority, state, note) VALUES (?,?,?,?,?,?)',
-      # unname() makes it a simple list of the 6 columns in order
-      params = unname(new_entry[1, ])
-    )
+    dbExecute(db,'INSERT INTO deadline (subject, task,deadline_date, priority, state, note ) 
+                  VALUES (?,?,?,?,?,?)',
+               params = list(
+                 new_entry$subject,
+                 new_entry$task,
+                 new_entry$deadline_date,
+                 new_entry$priority,
+                 new_entry$state,
+                 new_entry$note
+               ))
     
     v$data <- dbGetQuery(db, 'SELECT deadline_id, subject, task, deadline_date, priority, state, note
                               FROM deadline
                               WHERE is_deleted = 0')
   })
-    
   
   ## Extract schedule to csv file ##
   observeEvent(input$extractbutton,{
