@@ -11,6 +11,7 @@ library(DBI)
 library(dplyr)
 library(ggplot2)
 
+
 # ---- S3 “Deadline” class definitions begin here ----
 
 Deadline <- function(subject, task, deadline_date, priority,
@@ -171,8 +172,10 @@ ui <- navbarPage("Personal Scheduler",
                                       selected = NULL,
                                       multiple = TRUE),
                               
-                          dateInput("month", label = "Month",
-                                        format = "MM")
+                          selectInput("month", label   = "Month",
+                            choices = c(`(All)` = "", month.abb),
+                            selected = ""
+                          )
                           # dateInput("date", label = "Date",
                           #           format = "yyyy-mm-dd"),
                  )),
@@ -392,34 +395,38 @@ server<- function(input, output, session) {
   
   ## Filter data for plot ##
 
-  all_deadlines <- reactive({dbGetQuery(db, 'SELECT deadline_id, subject, task, deadline_date, priority, state, note
-                                       FROM deadline')
-  })
-  
   filtered_deadlines <- reactive({
-    req(all_deadlines)
-    df_plot <- all_deadlines()
-  
-    df_plot$deadline_date <- as.Date(df_plot$deadline_date)
-    df_plot$month <- format(df_plot$deadline_date, "%b")
-  
-    # cat("Original row count:", nrow(df_plot), "\n")
-  
-    if (!is.null(input$subject) && length(input$subject) > 0) {
-      df_plot <- df_plot[df_plot$subject %in% input$subject, ]
-      # cat("After subject filter:", nrow(df_plot), "\n")
-    }
-    if (!is.null(input$task) && length(input$task) > 0) {
-      df_plot <- df_plot[df_plot$task %in% input$task, ]
-      # cat("After task filter:", nrow(df_plot), "\n")
-    }
-    if (!is.null(input$state) && length(input$state) > 0) {
-      df_plot <- df_plot[df_plot$state %in% input$state, ]
-      # cat("After state filter:", nrow(df_plot), "\n")
-    }
-    df_plot
-    })
     
+    df_filtered <- dbGetQuery(db, 'SELECT deadline_id, subject, task, deadline_date, priority, state, note
+                                       FROM deadline
+                                       WHERE is_deleted = 0')    %>%
+      mutate(
+        deadline_date = as.Date(deadline_date),
+        month         = factor(format(deadline_date, "%b"),
+                               levels = month.abb)
+      )
+    # cat("Original row count:", nrow(df_filtered), "\n")
+
+    if (length(input$subject) > 0) {
+      df_filtered <- df_filtered %>% filter(subject %in% input$subject)
+      # cat("After subject filter:", nrow(df_filtered), "\n")
+    }
+    if (length(input$task) > 0) {
+      df_filtered <- df_filtered %>% filter(task %in% input$task)
+      # cat("After task filter:", nrow(df_filtered), "\n")
+    }
+    if (length(input$state) > 0) {
+      df_filtered <- df_filtered %>% filter(state %in% input$state)
+      # cat("After state filter:", nrow(df_filtered), "\n")
+    }
+    if (nzchar(input$month)) {
+      df_filtered <- df_filtered %>% filter(month == input$month)
+      # cat("After month filter:", nrow(df_filtered), "\n")
+    }
+    df_filtered
+})
+  
+  
   ## Render plot ##
   output$progress_plot <- renderPlot({
     df_plot <- filtered_deadlines()
@@ -428,7 +435,7 @@ server<- function(input, output, session) {
       return(NULL)}
     
     df_plot$state <- as.character(df_plot$state)
-    df_plot$month <- factor(df_plot$month, levels = month.abb)
+    # df_plot$month <- factor(df_plot$month, levels = month.abb)
     
     df_summary <- df_plot %>%
       group_by(month,state) %>%
