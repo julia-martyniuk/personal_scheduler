@@ -262,24 +262,31 @@ server<- function(input, output, session) {
     
     req(input$cr_state)
     
-    selected_items <- selected()
+    # — VECTORISED UPDATE START —
+    ids <- sorted_by_deadlines()$deadline_id[selected()]
+    if (length(ids)) {
+      ph <- paste(rep("?", length(ids)), collapse = ",")
+      params <- c(list(input$cr_state, input$new_note), as.list(ids))
+      dbExecute(
+        db,
+        sprintf(
+          "UPDATE deadline
+           SET state = ?, note = ?
+         WHERE deadline_id IN (%s)",
+          ph
+        ),
+        params = params
+      )
+    }
+    # — VECTORISED UPDATE END —
     
-      if (length(selected_items) > 0) {
-        for (i in selected_items) {
-          row_id <- sorted_by_deadlines()[i, "deadline_id"]
-        
-        
-          dbExecute(db, 'UPDATE deadline 
-                         SET state = ?, note = ? 
-                         WHERE deadline_id = ?',
-                         params = list(input$cr_state, input$new_note, row_id))}}
-    
-    v$data <- dbGetQuery(db, 'SELECT deadline_id, subject, task, deadline_date, priority, state, note
-                              FROM deadline
-                              WHERE is_deleted = 0')
+    # Refresh reactive data
+    v$data <- dbGetQuery(db, '
+    SELECT deadline_id, subject, task, deadline_date, priority, state, note
+    FROM deadline
+    WHERE is_deleted = 0
+  ')
   })
-  
-
   
   ## Delete items ##
   observeEvent(input$deletebutton, {
