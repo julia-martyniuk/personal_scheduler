@@ -11,6 +11,9 @@ library(DBI)
 library(dplyr)
 library(ggplot2)
 
+####################################
+# Define classes                   #
+####################################
 
 # ---- S3 “Deadline” class definitions begin here ----
 
@@ -65,7 +68,6 @@ as.data.frame.Deadline <- function(x, ...) {
 # ---- end S3 methods ----
 # ---- begin S3: urgency ----
 
-
 urgency <- function(x) UseMethod("urgency")
 
 # for a single Deadline, returns (deadline_date − today)
@@ -74,7 +76,6 @@ urgency.Deadline <- function(x) {
 }
 
 # ---- end S3: urgency ----
-
 # ---- begin S3: setState ----
 
 setState <- function(x, state, note) UseMethod("setState")
@@ -176,8 +177,6 @@ ui <- navbarPage("Personal Scheduler",
                             choices = c(`(All)` = "", month.abb),
                             selected = ""
                           )
-                          # dateInput("date", label = "Date",
-                          #           format = "yyyy-mm-dd"),
                  )),
                  column(width = 9,plotOutput("progress_plot")))
                  
@@ -234,7 +233,6 @@ server<- function(input, output, session) {
     dbExecute(
       db,
       'INSERT INTO deadline (subject, task, deadline_date, priority, state, note) VALUES (?,?,?,?,?,?)',
-      # unname() makes it a simple list of the 6 columns in order
       params = unname(new_entry[1, ])
     )
     
@@ -283,7 +281,6 @@ server<- function(input, output, session) {
     }
     # — VECTORISED UPDATE END —
     
-    # Refresh reactive data
     v$data <- dbGetQuery(db, '
     SELECT deadline_id, subject, task, deadline_date, priority, state, note
     FROM deadline
@@ -291,37 +288,16 @@ server<- function(input, output, session) {
   ')
   })
   
-  ## Delete items ##
-  # observeEvent(input$deletebutton, {
-  #   
-  #   print('Delete button clicked...')
-  #   
-  #   selected_items <- selected()
-  #   
-  #   if (length(selected_items) > 0) {
-  #     for (i in selected_items) {
-  #       row_id <- sorted_by_deadlines()[i, "deadline_id"]
-  #       
-  #       
-  #   dbExecute(db, 'UPDATE deadline 
-  #                  SET is_deleted = TRUE 
-  #                  WHERE deadline_id = ?',
-  #                 params = list(row_id))}}
-  #   
-  #   v$data <- dbGetQuery(db, 'SELECT deadline_id, subject, task, deadline_date, priority, state, note
-  #                             FROM deadline
-  #                             WHERE is_deleted = 0')
-  #   
-  # })
   
+  ## Delete deadline item ##
   observeEvent(input$deletebutton, {
     
     print('Delete button clicked...')
     
-    # 1. collect all selected IDs at once
+    # collect all selected IDs
     ids <- sorted_by_deadlines()$deadline_id[selected()]
     
-    # 2. if any, do one-shot UPDATE … IN (…)
+    # update selected items
     if (length(ids)) {
       ph     <- paste(rep("?", length(ids)), collapse = ",")
       params <- as.list(ids)
@@ -435,7 +411,6 @@ server<- function(input, output, session) {
       return(NULL)}
     
     df_plot$state <- as.character(df_plot$state)
-    # df_plot$month <- factor(df_plot$month, levels = month.abb)
     
     df_summary <- df_plot %>%
       group_by(month,state) %>%
@@ -462,8 +437,6 @@ server<- function(input, output, session) {
   #   print(v$data[selected(), ])
   # })
   
-
-
 ####################################
 # Create the shiny app             #
 ####################################
