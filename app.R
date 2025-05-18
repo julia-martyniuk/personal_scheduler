@@ -11,6 +11,8 @@ library(DBI)
 library(dplyr)
 library(ggplot2)
 
+print("test master commit")
+
 # ---- S3 “Deadline” class definitions begin here ----
 
 Deadline <- function(subject, task, deadline_date, priority,
