@@ -344,29 +344,49 @@ server<- function(input, output, session) {
   ## Render table ##
   output$new_deadline <- renderReactable({
     
-    reactable(sorted_by_deadlines(), 
-              striped = TRUE,
-              highlight = TRUE,
-              selection = "multiple",
-              onClick = "select",
-              theme = reactableTheme(
-                borderColor = "#dfe2e5",
-                stripedColor = "#f6f8fa",
-                highlightColor = "cornsilk",
-                cellPadding = "8px 12px",
-                style = list(fontFamily = "-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif"),
-                searchInputStyle = list(width = "100%")),
-              columns = list(
-                deadline_date = colDef(
-                  defaultSortOrder = "desc",
-                  style = function(value) {
-                    if (as.Date(value) - Sys.Date() < 3) {
-                      color <- "red"}
-                    else if (as.Date(value) - Sys.Date() < 7)  {
-                      color <- "yellow"}
-                    else {color <- NULL}
-                    list(background = color)}),
-                deadline_id = colDef(show = FALSE))
+    days_left_df <- sorted_by_deadlines() %>%
+      mutate(
+        days_left = as.numeric(deadline_date - Sys.Date())
+      )
+    
+    reactable(
+      days_left_df,
+      striped   = TRUE,
+      highlight = TRUE,
+      selection = "multiple",
+      onClick   = "select",
+      sortable  = TRUE,
+      defaultSorted = list(days_left = "asc"),
+      theme = reactableTheme(
+        borderColor      = "#dfe2e5",
+        stripedColor     = "#f6f8fa",
+        highlightColor   = "cornsilk",
+        cellPadding      = "8px 12px",
+        style            = list(fontFamily = "-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif"),
+        searchInputStyle = list(width = "100%")
+      ),
+      columns = list(
+        
+        days_left = colDef(
+          name   = "days left",
+          footer = htmltools::tags$span(
+            style = "font-style: italic;",
+            "lower = more urgent"
+          )
+        ),
+        
+        deadline_date = colDef(
+          defaultSortOrder = "desc",
+          style = function(value) {
+            days <- as.Date(value) - Sys.Date()
+            color <- if (days < 3) "red"
+            else if (days < 7) "yellow"
+            else NULL
+            list(background = color)
+          }
+        ),
+        deadline_id = colDef(show = FALSE)
+      )
     )
   })
   
