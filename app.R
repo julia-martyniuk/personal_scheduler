@@ -12,7 +12,7 @@ library(DBI)
 library(dplyr)
 library(ggplot2)
 library(shinyalert) 
-
+library(bslib)
 ####################################
 # Define classes                   #
 ####################################
@@ -130,10 +130,11 @@ tasks <- c("programming task", "test", "project", "exam", "presentation", "task"
 # UI                               #
 ####################################
 ui <- navbarPage("Personal Scheduler",
+       theme = bs_theme(version = 5, bootswatch = "cerulean"),
        tabPanel("Current Schedule",          
         fluidPage(
           useShinyalert(),
-          theme = shinytheme("flatly"),
+          # theme = shinytheme("flatly"),
           h2('My deadlines'),
           fluidRow(
             column(width = 3,
@@ -151,8 +152,10 @@ ui <- navbarPage("Personal Scheduler",
                                  label = "Deadline date",
                                  format = "yyyy-mm-dd"),
                        
-                   actionButton("addbutton", "Add new deadline"),
-                   actionButton("extractbutton", "Extract to csv")),
+                   actionButton("addbutton", "Add new deadline",
+                                class = "btn btn-primary"),
+                   actionButton("extractbutton", "Extract to csv",
+                                class = "btn btn-secondary")),
                    tags$hr(),
                    
                    div(h4("Change selected items"),
@@ -163,15 +166,17 @@ ui <- navbarPage("Personal Scheduler",
                    textInput("new_note", label = "Leave a note", 
                              placeholder = "max 60 symbols"),
                        
-                   actionButton("updateselected", "Update selected item"), 
-                   actionButton("deletebutton", "Delete"))),
+                   actionButton("updateselected", "Update selected item",
+                                class = "btn btn-primary" ), 
+                   actionButton("deletebutton", "Delete",
+                                class = "btn btn-warning"))),
             
             column(width = 9,reactableOutput("new_deadline")),
             verbatimTextOutput("selected")
   ))),
       tabPanel("Progress",
                fluidPage(
-                 theme = shinytheme("flatly"),
+                 # theme = shinytheme("flatly"),
                  h2("Check your progress"),
                  fluidRow(
                    column(width = 3,
