@@ -227,6 +227,7 @@ server<- function(input, output, session) {
   observeEvent(input$addbutton,{
     
     print('Add Button clicked...')
+    showNotification("New deadline saved")
     
     req(input$subject, input$task, input$deadline_date)
     
@@ -276,6 +277,7 @@ server<- function(input, output, session) {
   observeEvent(input$updateselected, {
     
     print('Update Button clicked...')
+    showNotification("Deadline successfully updated")
     
     req(input$cr_state)
     
@@ -327,6 +329,7 @@ server<- function(input, output, session) {
   observeEvent(input$deletebutton, {
     
     print('Delete button clicked...')
+    showNotification("Deadline deleted")
     
     # collect all selected IDs
     ids <- sorted_by_deadlines()$deadline_id[selected()]
