@@ -88,7 +88,22 @@ setState.Deadline <- function(x, state, note = "") {
 
 # ---- end S3: setState ----
 
+####################################
+# Define defensive functions       #
+####################################
 
+validate_note <- function(note){
+    if (!is.character(note)) {
+      stop("Note must be a string.")
+    }
+  
+  if (nchar(note) > 60){
+    print("There is more than 60 characters")
+    stop("Note must not exceed 60 characters")
+  }
+  return(TRUE)
+}
+  
 ####################################
 # Connect database                #
 ####################################
@@ -142,7 +157,8 @@ ui <- navbarPage("Personal Scheduler",
                    selectInput("cr_state", label = "Current state", 
                                    choices = statuses, 
                                    selected = NULL),
-                   textInput("new_note", label = "Keep a note"),
+                   textInput("new_note", label = "Leave a note", 
+                             placeholder = "max 60 symbols"),
                        
                    actionButton("updateselected", "Update selected item"), 
                    actionButton("deletebutton", "Delete"))),
@@ -262,6 +278,24 @@ server<- function(input, output, session) {
     print('Update Button clicked...')
     
     req(input$cr_state)
+    
+    # Defensive validation for the note field
+    is_note_correct <- tryCatch({
+      validate_note(input$new_note)
+      TRUE
+    }, error = function(e) {
+      showModal(modalDialog(
+        title = "Validation Error",
+        paste("Update failed:", e$message),
+        easyClose = TRUE
+      ))
+      FALSE
+    })
+    
+    if (!is_note_correct) {
+      print("Validation failed. Aborting update.")
+      return()
+    }
     
     # — VECTORISED UPDATE START —
     ids <- sorted_by_deadlines()$deadline_id[selected()]
