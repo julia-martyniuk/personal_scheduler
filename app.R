@@ -1,6 +1,7 @@
 # Load R packages 
 # install.packages("reactable")
 # install.packages("RSQLite")
+# install.packages("shinyalert")
 
 library(shiny)
 library(shinythemes)
@@ -10,6 +11,7 @@ library(RSQLite)
 library(DBI)
 library(dplyr)
 library(ggplot2)
+library(shinyalert) 
 
 ####################################
 # Define classes                   #
@@ -130,6 +132,7 @@ tasks <- c("programming task", "test", "project", "exam", "presentation", "task"
 ui <- navbarPage("Personal Scheduler",
        tabPanel("Current Schedule",          
         fluidPage(
+          useShinyalert(),
           theme = shinytheme("flatly"),
           h2('My deadlines'),
           fluidRow(
@@ -205,6 +208,42 @@ ui <- navbarPage("Personal Scheduler",
 ####################################
 
 server<- function(input, output, session) {
+  
+  ## Welcome alert ##
+  observe({
+    upcoming_deadlines <- dbGetQuery(db, "SELECT subject 
+               FROM deadline 
+               WHERE deadline_date BETWEEN DATE('now', '+1 days') 
+               AND DATE('now', '+3 days') 
+               AND is_deleted = 0")
+    
+    today_deadline <- dbGetQuery(db, "SELECT subject 
+               FROM deadline 
+               WHERE deadline_date BETWEEN DATE('now') 
+               AND DATE('now', '+0 days') 
+               AND is_deleted = 0")
+
+    missed_deadlines <- dbGetQuery(db, "SELECT subject 
+               FROM deadline 
+               WHERE deadline_date < DATE('now') 
+               AND deadline_date > DATE('now', '-30 days') 
+               AND is_deleted = 0")
+    
+    alert_text <- paste0(
+      "You have:\n",
+      nrow(today_deadline), " deadline(s) today\n",
+      nrow(upcoming_deadlines), " deadline(s) in the next 3 days\n",
+      nrow(missed_deadlines), " missed deadline(s)"
+    )
+    
+    shinyalert(
+      title = "Welcome!",
+      text = alert_text,
+      type = "info"
+    )
+
+  })
+  
   
   ## Build a schedule ##
   v <- reactiveValues()
@@ -395,7 +434,7 @@ server<- function(input, output, session) {
           defaultSortOrder = "desc",
           style = function(value) {
             days <- as.Date(value) - Sys.Date()
-            color <- if (days < 3) "red"
+            color <- if (days < 2) "red"
             else if (days < 7) "yellow"
             else NULL
             list(background = color)
