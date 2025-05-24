@@ -1,6 +1,7 @@
 # Load R packages 
 # install.packages("reactable")
 # install.packages("RSQLite")
+# install.packages("shinyalert")
 
 library(shiny)
 library(shinythemes)
@@ -10,7 +11,8 @@ library(RSQLite)
 library(DBI)
 library(dplyr)
 library(ggplot2)
-
+library(shinyalert) 
+library(bslib)
 ####################################
 # Define classes                   #
 ####################################
@@ -88,7 +90,22 @@ setState.Deadline <- function(x, state, note = "") {
 
 # ---- end S3: setState ----
 
+####################################
+# Define defensive functions       #
+####################################
 
+validate_note <- function(note){
+    if (!is.character(note)) {
+      stop("Note must be a string.")
+    }
+  
+  if (nchar(note) > 60){
+    print("There is more than 60 characters")
+    stop("Note must not exceed 60 characters")
+  }
+  return(TRUE)
+}
+  
 ####################################
 # Connect database                #
 ####################################
@@ -97,32 +114,28 @@ db <- dbConnect(RSQLite::SQLite(), "scheduler.db")
 ####################################
 # Read the data                    #
 ####################################
-read_data <- function() {
-  program <- read.csv("NW2-DS.csv")
-  program$Course.name <- 
-    sprintf("%s - %s", program$Course.name, program$Course.type)
-  program
-}
   
-program <- read_data()
-
-statuses <- c("new", "in progress", "done", "cancelled")
-tasks <- c("programming task", "test", "project", "exam", "presentation", "task")
+program <- dbGetQuery(db, "SELECT * FROM course")
+statuses <- dbGetQuery(db, "SELECT name FROM state")
+tasks <- dbGetQuery(db, "SELECT name FROM task")
+subjects <- dbGetQuery(db, "SELECT name FROM course")
 
 ####################################
 # UI                               #
 ####################################
 ui <- navbarPage("Personal Scheduler",
+       theme = bs_theme(version = 5, bootswatch = "cerulean"),
        tabPanel("Current Schedule",          
         fluidPage(
-          theme = shinytheme("flatly"),
+          useShinyalert(),
+          # theme = shinytheme("flatly"),
           h2('My deadlines'),
           fluidRow(
             column(width = 3,
                    div(h4("Add new deadline"),
                        
                    selectInput("subject", label = "Subject", 
-                                   choices = program$Course.name, 
+                                   choices = subjects, 
                                    selected = NULL),
                        
                    selectInput("task", label = "Task", 
@@ -133,8 +146,10 @@ ui <- navbarPage("Personal Scheduler",
                                  label = "Deadline date",
                                  format = "yyyy-mm-dd"),
                        
-                   actionButton("addbutton", "Add new deadline"),
-                   actionButton("extractbutton", "Extract to csv")),
+                   actionButton("addbutton", "Add new deadline",
+                                class = "btn btn-primary"),
+                   actionButton("extractbutton", "Extract to csv",
+                                class = "btn btn-secondary")),
                    tags$hr(),
                    
                    div(h4("Change selected items"),
@@ -142,24 +157,27 @@ ui <- navbarPage("Personal Scheduler",
                    selectInput("cr_state", label = "Current state", 
                                    choices = statuses, 
                                    selected = NULL),
-                   textInput("new_note", label = "Keep a note"),
+                   textInput("new_note", label = "Leave a note", 
+                             placeholder = "max 60 symbols"),
                        
-                   actionButton("updateselected", "Update selected item"), 
-                   actionButton("deletebutton", "Delete"))),
+                   actionButton("updateselected", "Update selected item",
+                                class = "btn btn-primary" ), 
+                   actionButton("deletebutton", "Delete",
+                                class = "btn btn-warning"))),
             
             column(width = 9,reactableOutput("new_deadline")),
             verbatimTextOutput("selected")
   ))),
       tabPanel("Progress",
                fluidPage(
-                 theme = shinytheme("flatly"),
+                 # theme = shinytheme("flatly"),
                  h2("Check your progress"),
                  fluidRow(
                    column(width = 3,
                           div(h4("Filter by"),
                               
                           selectInput("subject", label = "Subject", 
-                                          choices = program$Course.name, 
+                                          choices = subjects, 
                                           selected = NULL,
                                           multiple = TRUE),
                               
@@ -190,18 +208,61 @@ ui <- navbarPage("Personal Scheduler",
 
 server<- function(input, output, session) {
   
+  ## Welcome alert ##
+  observe({
+      upcoming_deadlines <- dbGetQuery(db, "
+                 SELECT course_id 
+                 FROM deadline 
+                 WHERE date BETWEEN DATE('now', '+1 days')
+                 AND DATE('now', '+3 days') 
+                 AND is_deleted = 0")
+    
+    today_deadline <- dbGetQuery(db, "
+               SELECT course_id  
+               FROM deadline 
+               WHERE date BETWEEN DATE('now') 
+               AND DATE('now', '+0 days') 
+               AND is_deleted = 0")
+
+    missed_deadlines <- dbGetQuery(db, "
+               SELECT course_id  
+               FROM deadline 
+               WHERE date < DATE('now') 
+               AND date > DATE('now', '-30 days') 
+               AND is_deleted = 0")
+    
+    alert_text <- paste0(
+      "You have:\n",
+      nrow(today_deadline), " deadline(s) today\n",
+      nrow(upcoming_deadlines), " deadline(s) in the next 3 days\n",
+      nrow(missed_deadlines), " missed deadline(s)"
+    )
+    
+    shinyalert(
+      title = "Welcome!",
+      text = alert_text,
+      type = "info"
+    )
+
+  })
+  
+  
   ## Build a schedule ##
   v <- reactiveValues()
   
-  v$data <- dbGetQuery(db, 'SELECT deadline_id, subject, task, deadline_date, priority, state, note
-                  FROM deadline
-                  WHERE is_deleted = 0')
+  v$data <- dbGetQuery(db, 'SELECT d.deadline_id, c.name AS subject, t.name AS task, d.date AS deadline_date, d.priority, s.name AS state, d.note
+                  FROM deadline d
+                  JOIN course c ON d.course_id = c.course_id
+                  JOIN task t ON d.task_id = t.task_id
+                  JOIN state s ON d.state_id = s.state_id
+                  WHERE d.is_deleted = 0')
   
   sorted_by_deadlines <- reactive({
     v$data %>%
       mutate(deadline_date = as.Date(deadline_date)) %>%
       arrange(deadline_date)
   })
+  
 
   selected <- reactive(getReactableState("new_deadline", "selected"))
   
@@ -211,34 +272,36 @@ server<- function(input, output, session) {
   observeEvent(input$addbutton,{
     
     print('Add Button clicked...')
+    showNotification("New deadline saved")
     
     req(input$subject, input$task, input$deadline_date)
     
+    course_id <- dbGetQuery(db, "SELECT course_id FROM course WHERE name = ?", 
+                            params = list(input$subject))$course_id
+    task_id <- dbGetQuery(db, "SELECT task_id FROM task WHERE name = ?", 
+                          params = list(input$task))$task_id
+    state_id <- dbGetQuery(db, "SELECT state_id FROM state WHERE name = 'new'")$state_id
+    
     # Calculate priority #
-    selected_subject <- program[program$Course.name == input$subject,]
-    ects <- if (nrow(selected_subject) > 0) {selected_subject$ECTS}
+    selected_subject <- program[program$name == input$subject,]
+    ects <- if (nrow(selected_subject) > 0) {selected_subject$ects}
     
     priority_d <- if (ects < 3) {3}
     else if (ects < 5) {2}
     else {1}
     
-    dl <- Deadline(
-      subject       = input$subject,
-      task          = input$task,
-      deadline_date = input$deadline_date,
-      priority      = priority_d
-    )
-    new_entry <- as.data.frame.Deadline(dl)
-    
     dbExecute(
       db,
-      'INSERT INTO deadline (subject, task, deadline_date, priority, state, note) VALUES (?,?,?,?,?,?)',
-      params = unname(new_entry[1, ])
+      'INSERT INTO deadline (course_id, task_id, date, priority, state_id, note) VALUES (?,?,?,?,?,?)',
+      params = list(course_id, task_id, input$deadline_date, priority_d, state_id, "") 
     )
     
-    v$data <- dbGetQuery(db, 'SELECT deadline_id, subject, task, deadline_date, priority, state, note
-                              FROM deadline
-                              WHERE is_deleted = 0')
+    v$data <- dbGetQuery(db, 'SELECT d.deadline_id, c.name AS subject, t.name AS task, d.date AS deadline_date, d.priority, s.name AS state, d.note
+                  FROM deadline d
+                  JOIN course c ON d.course_id = c.course_id
+                  JOIN task t ON d.task_id = t.task_id
+                  JOIN state s ON d.state_id = s.state_id
+                  WHERE d.is_deleted = 0')
   })
   
   ## Extract schedule to csv file ##
@@ -260,19 +323,42 @@ server<- function(input, output, session) {
   observeEvent(input$updateselected, {
     
     print('Update Button clicked...')
+    showNotification("Deadline successfully updated")
     
     req(input$cr_state)
+    
+    # Defensive validation for the note field
+    is_note_correct <- tryCatch({
+      validate_note(input$new_note)
+      TRUE
+    }, error = function(e) {
+      showModal(modalDialog(
+        title = "Validation Error",
+        paste("Update failed:", e$message),
+        easyClose = TRUE
+      ))
+      FALSE
+    })
+    
+    if (!is_note_correct) {
+      print("Validation failed. Aborting update.")
+      return()
+    }
+    
+    state_id <- dbGetQuery(db, "SELECT state_id FROM state WHERE name = ?", 
+                           params = list(input$cr_state))$state_id
     
     # — VECTORISED UPDATE START —
     ids <- sorted_by_deadlines()$deadline_id[selected()]
     if (length(ids)) {
       ph <- paste(rep("?", length(ids)), collapse = ",")
-      params <- c(list(input$cr_state, input$new_note), as.list(ids))
+      # params <- c(list(input$cr_state, input$new_note), as.list(ids))
+      params <- c(list(state_id, input$new_note), as.list(ids))
       dbExecute(
         db,
         sprintf(
           "UPDATE deadline
-           SET state = ?, note = ?
+           SET state_id = ?, note = ?
          WHERE deadline_id IN (%s)",
           ph
         ),
@@ -281,11 +367,12 @@ server<- function(input, output, session) {
     }
     # — VECTORISED UPDATE END —
     
-    v$data <- dbGetQuery(db, '
-    SELECT deadline_id, subject, task, deadline_date, priority, state, note
-    FROM deadline
-    WHERE is_deleted = 0
-  ')
+    v$data <- dbGetQuery(db, 'SELECT d.deadline_id, c.name AS subject, t.name AS task, d.date AS deadline_date, d.priority, s.name AS state, d.note
+                  FROM deadline d
+                  JOIN course c ON d.course_id = c.course_id
+                  JOIN task t ON d.task_id = t.task_id
+                  JOIN state s ON d.state_id = s.state_id
+                  WHERE d.is_deleted = 0')
   })
   
   
@@ -293,6 +380,7 @@ server<- function(input, output, session) {
   observeEvent(input$deletebutton, {
     
     print('Delete button clicked...')
+    showNotification("Deadline deleted")
     
     # collect all selected IDs
     ids <- sorted_by_deadlines()$deadline_id[selected()]
@@ -313,11 +401,12 @@ server<- function(input, output, session) {
       )
     }
     
-    v$data <- dbGetQuery(db, '
-    SELECT deadline_id, subject, task, deadline_date, priority, state, note
-      FROM deadline
-     WHERE is_deleted = 0
-  ')
+    v$data <- dbGetQuery(db, 'SELECT d.deadline_id, c.name AS subject, t.name AS task, d.date AS deadline_date, d.priority, s.name AS state, d.note
+                  FROM deadline d
+                  JOIN course c ON d.course_id = c.course_id
+                  JOIN task t ON d.task_id = t.task_id
+                  JOIN state s ON d.state_id = s.state_id
+                  WHERE d.is_deleted = 0')
   })
   
   ## Render table ##
@@ -358,7 +447,7 @@ server<- function(input, output, session) {
           defaultSortOrder = "desc",
           style = function(value) {
             days <- as.Date(value) - Sys.Date()
-            color <- if (days < 3) "red"
+            color <- if (days < 2) "red"
             else if (days < 7) "yellow"
             else NULL
             list(background = color)
@@ -373,9 +462,12 @@ server<- function(input, output, session) {
 
   filtered_deadlines <- reactive({
     
-    df_filtered <- dbGetQuery(db, 'SELECT deadline_id, subject, task, deadline_date, priority, state, note
-                                       FROM deadline
-                                       WHERE is_deleted = 0')    %>%
+    df_filtered <- dbGetQuery(db, 'SELECT d.deadline_id, c.name AS subject, t.name AS task, d.date AS deadline_date, d.priority, s.name AS state, d.note
+                  FROM deadline d
+                  JOIN course c ON d.course_id = c.course_id
+                  JOIN task t ON d.task_id = t.task_id
+                  JOIN state s ON d.state_id = s.state_id
+                  WHERE d.is_deleted = 0')    %>%
       mutate(
         deadline_date = as.Date(deadline_date),
         month         = factor(format(deadline_date, "%b"),
