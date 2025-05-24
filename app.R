@@ -410,6 +410,9 @@ server<- function(input, output, session) {
                   JOIN task t ON d.task_id = t.task_id
                   JOIN state s ON d.state_id = s.state_id
                   WHERE d.is_deleted = 0')
+    
+    # Re-render the plot after deleting a record
+    plot_trigger(plot_trigger() + 1)
   })
   
   ## Render table ##
