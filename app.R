@@ -365,7 +365,7 @@ server<- function(input, output, session) {
         sprintf(
           "UPDATE deadline
            SET state_id = ?, note = ?
-         WHERE deadline_id IN (%s)",
+           WHERE deadline_id IN (%s)",
           ph
         ),
         params = params
@@ -373,7 +373,8 @@ server<- function(input, output, session) {
     }
     # — VECTORISED UPDATE END —
     
-    v$data <- dbGetQuery(db, 'SELECT d.deadline_id, c.name AS subject, t.name AS task, d.date AS deadline_date, d.priority, s.name AS state, d.note
+    v$data <- dbGetQuery(db, '
+                  SELECT d.deadline_id, c.name AS subject, t.name AS task, d.date AS deadline_date, d.priority, s.name AS state, d.note
                   FROM deadline d
                   JOIN course c ON d.course_id = c.course_id
                   JOIN task t ON d.task_id = t.task_id
@@ -397,17 +398,18 @@ server<- function(input, output, session) {
       params <- as.list(ids)
       dbExecute(
         db,
-        sprintf(
-          "UPDATE deadline
+        sprintf("
+            UPDATE deadline
             SET is_deleted = TRUE
-          WHERE deadline_id IN (%s)",
+            WHERE deadline_id IN (%s)",
           ph
         ),
         params = params
       )
     }
     
-    v$data <- dbGetQuery(db, 'SELECT d.deadline_id, c.name AS subject, t.name AS task, d.date AS deadline_date, d.priority, s.name AS state, d.note
+    v$data <- dbGetQuery(db, '
+                  SELECT d.deadline_id, c.name AS subject, t.name AS task, d.date AS deadline_date, d.priority, s.name AS state, d.note
                   FROM deadline d
                   JOIN course c ON d.course_id = c.course_id
                   JOIN task t ON d.task_id = t.task_id
@@ -469,7 +471,8 @@ server<- function(input, output, session) {
   filtered_deadlines <- reactive({
     # req (v$data)
     
-    df_filtered <- dbGetQuery(db, 'SELECT d.deadline_id, c.name AS subject, t.name AS task, d.date AS deadline_date, d.priority, s.name AS state, d.note
+    df_filtered <- dbGetQuery(db, '
+                  SELECT d.deadline_id, c.name AS subject, t.name AS task, d.date AS deadline_date, d.priority, s.name AS state, d.note
                   FROM deadline d
                   JOIN course c ON d.course_id = c.course_id
                   JOIN task t ON d.task_id = t.task_id
