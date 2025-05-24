@@ -454,6 +454,7 @@ server<- function(input, output, session) {
             else if (days < 2) "red"
             else if (days < 7) "yellow"
             else NULL
+            list(background = color)
           }
         ),
         deadline_id = colDef(show = FALSE)
