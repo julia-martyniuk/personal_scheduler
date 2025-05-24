@@ -32,7 +32,7 @@ Deadline <- function(subject, task, deadline_date, priority,
     list(
       subject       = subject,
       task          = task,
-      deadline_date = as.Date(deadline_date),
+      deadline_date = deadline_date,
       priority      = priority,
       state         = state,
       note          = note
@@ -175,26 +175,10 @@ ui <- navbarPage("Personal Scheduler",
                  fluidRow(
                    column(width = 3,
                           div(h4("Filter by"),
-                              
-                          selectInput("subject", label = "Subject", 
-                                          choices = subjects, 
-                                          selected = NULL,
-                                          multiple = TRUE),
-                              
-                          selectInput("task", label = "Task", 
-                                          choices = tasks, 
-                                          selected = NULL,
-                                          multiple = TRUE),
-                          
-                          selectInput("state", label = "State", 
-                                      choices = statuses, 
-                                      selected = NULL,
-                                      multiple = TRUE),
-                              
-                          selectInput("month", label   = "Month",
-                            choices = c(`(All)` = "", month.abb),
-                            selected = ""
-                          )
+                          selectInput("prog_subject", label = "Subject", choices = subjects, multiple = TRUE),
+                          selectInput("prog_task", label = "Task", choices = tasks, multiple = TRUE),
+                          selectInput("prog_state", label = "State", choices = statuses, multiple = TRUE),
+                          selectInput("prog_month", label = "Month", choices = c(`(All)` = "", month.abb))
                  )),
                  column(width = 9,plotOutput("progress_plot")))
                  
@@ -207,6 +191,9 @@ ui <- navbarPage("Personal Scheduler",
 ####################################
 
 server<- function(input, output, session) {
+  
+  # Plot update trigger
+  plot_trigger <- reactiveVal(0)
   
   ## Welcome alert ##
   observe({
@@ -250,7 +237,8 @@ server<- function(input, output, session) {
   ## Build a schedule ##
   v <- reactiveValues()
   
-  v$data <- dbGetQuery(db, 'SELECT d.deadline_id, c.name AS subject, t.name AS task, d.date AS deadline_date, d.priority, s.name AS state, d.note
+  v$data <- dbGetQuery(db, '
+                  SELECT d.deadline_id, c.name AS subject, t.name AS task, d.date AS deadline_date, d.priority, s.name AS state, d.note
                   FROM deadline d
                   JOIN course c ON d.course_id = c.course_id
                   JOIN task t ON d.task_id = t.task_id
@@ -270,11 +258,17 @@ server<- function(input, output, session) {
   ## Add new deadline ##
   
   observeEvent(input$addbutton,{
+    req(input$subject, input$task, input$deadline_date)
     
     print('Add Button clicked...')
-    showNotification("New deadline saved")
     
-    req(input$subject, input$task, input$deadline_date)
+    # validate(
+    #   need(input$subject != "", "Please select a subject."),
+    #   need(input$task != "", "Please select a task."),
+    #   need(!is.null(input$deadline_date) && input$deadline_date != "", "Please select a deadline date.")
+    # )
+    
+    showNotification("New deadline saved")
     
     course_id <- dbGetQuery(db, "SELECT course_id FROM course WHERE name = ?", 
                             params = list(input$subject))$course_id
@@ -293,15 +287,19 @@ server<- function(input, output, session) {
     dbExecute(
       db,
       'INSERT INTO deadline (course_id, task_id, date, priority, state_id, note) VALUES (?,?,?,?,?,?)',
-      params = list(course_id, task_id, input$deadline_date, priority_d, state_id, "") 
+      params = list(course_id, task_id, as.character(input$deadline_date), priority_d, state_id, "") 
     )
     
-    v$data <- dbGetQuery(db, 'SELECT d.deadline_id, c.name AS subject, t.name AS task, d.date AS deadline_date, d.priority, s.name AS state, d.note
+    v$data <- dbGetQuery(db, '
+                  SELECT d.deadline_id, c.name AS subject, t.name AS task, d.date AS deadline_date, d.priority, s.name AS state, d.note
                   FROM deadline d
                   JOIN course c ON d.course_id = c.course_id
                   JOIN task t ON d.task_id = t.task_id
                   JOIN state s ON d.state_id = s.state_id
                   WHERE d.is_deleted = 0')
+  
+    # Re-render the plot after adding a new record
+    plot_trigger(plot_trigger() + 1)
   })
   
   ## Extract schedule to csv file ##
@@ -359,7 +357,7 @@ server<- function(input, output, session) {
         sprintf(
           "UPDATE deadline
            SET state_id = ?, note = ?
-         WHERE deadline_id IN (%s)",
+           WHERE deadline_id IN (%s)",
           ph
         ),
         params = params
@@ -367,12 +365,16 @@ server<- function(input, output, session) {
     }
     # — VECTORISED UPDATE END —
     
-    v$data <- dbGetQuery(db, 'SELECT d.deadline_id, c.name AS subject, t.name AS task, d.date AS deadline_date, d.priority, s.name AS state, d.note
+    v$data <- dbGetQuery(db, '
+                  SELECT d.deadline_id, c.name AS subject, t.name AS task, d.date AS deadline_date, d.priority, s.name AS state, d.note
                   FROM deadline d
                   JOIN course c ON d.course_id = c.course_id
                   JOIN task t ON d.task_id = t.task_id
                   JOIN state s ON d.state_id = s.state_id
                   WHERE d.is_deleted = 0')
+    
+    # Re-render the plot after updating a record
+    plot_trigger(plot_trigger() + 1)
   })
   
   
@@ -391,17 +393,18 @@ server<- function(input, output, session) {
       params <- as.list(ids)
       dbExecute(
         db,
-        sprintf(
-          "UPDATE deadline
+        sprintf("
+            UPDATE deadline
             SET is_deleted = TRUE
-          WHERE deadline_id IN (%s)",
+            WHERE deadline_id IN (%s)",
           ph
         ),
         params = params
       )
     }
     
-    v$data <- dbGetQuery(db, 'SELECT d.deadline_id, c.name AS subject, t.name AS task, d.date AS deadline_date, d.priority, s.name AS state, d.note
+    v$data <- dbGetQuery(db, '
+                  SELECT d.deadline_id, c.name AS subject, t.name AS task, d.date AS deadline_date, d.priority, s.name AS state, d.note
                   FROM deadline d
                   JOIN course c ON d.course_id = c.course_id
                   JOIN task t ON d.task_id = t.task_id
@@ -447,7 +450,8 @@ server<- function(input, output, session) {
           defaultSortOrder = "desc",
           style = function(value) {
             days <- as.Date(value) - Sys.Date()
-            color <- if (days < 2) "red"
+            color <- if (is.na(days)) NULL
+            else if (days < 2) "red"
             else if (days < 7) "yellow"
             else NULL
             list(background = color)
@@ -461,34 +465,40 @@ server<- function(input, output, session) {
   ## Filter data for plot ##
 
   filtered_deadlines <- reactive({
+    # req (v$data)
     
-    df_filtered <- dbGetQuery(db, 'SELECT d.deadline_id, c.name AS subject, t.name AS task, d.date AS deadline_date, d.priority, s.name AS state, d.note
+    # Trigger dependency
+    plot_trigger()
+    
+    df_filtered <- dbGetQuery(db, '
+                  SELECT d.deadline_id, c.name AS subject, t.name AS task, d.date AS deadline_date, d.priority, s.name AS state, d.note
                   FROM deadline d
                   JOIN course c ON d.course_id = c.course_id
                   JOIN task t ON d.task_id = t.task_id
                   JOIN state s ON d.state_id = s.state_id
                   WHERE d.is_deleted = 0')    %>%
+    # df_filtered <- v$data %>%
       mutate(
         deadline_date = as.Date(deadline_date),
         month         = factor(format(deadline_date, "%b"),
                                levels = month.abb)
       )
-    # cat("Original row count:", nrow(df_filtered), "\n")
+    cat("Original row count:", nrow(df_filtered), "\n")
 
-    if (length(input$subject) > 0) {
-      df_filtered <- df_filtered %>% filter(subject %in% input$subject)
+    if (length(input$prog_subject) > 0) {
+      df_filtered <- df_filtered %>% filter(subject %in% input$prog_subject)
       # cat("After subject filter:", nrow(df_filtered), "\n")
     }
-    if (length(input$task) > 0) {
-      df_filtered <- df_filtered %>% filter(task %in% input$task)
+    if (length(input$prog_task) > 0) {
+      df_filtered <- df_filtered %>% filter(task %in% input$prog_task)
       # cat("After task filter:", nrow(df_filtered), "\n")
     }
-    if (length(input$state) > 0) {
-      df_filtered <- df_filtered %>% filter(state %in% input$state)
+    if (length(input$prog_state) > 0) {
+      df_filtered <- df_filtered %>% filter(state %in% input$prog_state)
       # cat("After state filter:", nrow(df_filtered), "\n")
     }
-    if (nzchar(input$month)) {
-      df_filtered <- df_filtered %>% filter(month == input$month)
+    if (nzchar(input$prog_month)) {
+      df_filtered <- df_filtered %>% filter(month == input$prog_month)
       # cat("After month filter:", nrow(df_filtered), "\n")
     }
     df_filtered
@@ -497,6 +507,7 @@ server<- function(input, output, session) {
   
   ## Render plot ##
   output$progress_plot <- renderPlot({
+    
     df_plot <- filtered_deadlines()
     
     if (nrow(df_plot) == 0) {
