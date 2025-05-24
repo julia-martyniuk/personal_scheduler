@@ -32,7 +32,7 @@ Deadline <- function(subject, task, deadline_date, priority,
     list(
       subject       = subject,
       task          = task,
-      deadline_date = as.Date(deadline_date),
+      deadline_date = deadline_date,
       priority      = priority,
       state         = state,
       note          = note
@@ -270,11 +270,17 @@ server<- function(input, output, session) {
   ## Add new deadline ##
   
   observeEvent(input$addbutton,{
+    req(input$subject, input$task, input$deadline_date)
     
     print('Add Button clicked...')
-    showNotification("New deadline saved")
     
-    req(input$subject, input$task, input$deadline_date)
+    # validate(
+    #   need(input$subject != "", "Please select a subject."),
+    #   need(input$task != "", "Please select a task."),
+    #   need(!is.null(input$deadline_date) && input$deadline_date != "", "Please select a deadline date.")
+    # )
+    
+    showNotification("New deadline saved")
     
     course_id <- dbGetQuery(db, "SELECT course_id FROM course WHERE name = ?", 
                             params = list(input$subject))$course_id
@@ -293,7 +299,7 @@ server<- function(input, output, session) {
     dbExecute(
       db,
       'INSERT INTO deadline (course_id, task_id, date, priority, state_id, note) VALUES (?,?,?,?,?,?)',
-      params = list(course_id, task_id, input$deadline_date, priority_d, state_id, "") 
+      params = list(course_id, task_id, as.character(input$deadline_date), priority_d, state_id, "") 
     )
     
     v$data <- dbGetQuery(db, 'SELECT d.deadline_id, c.name AS subject, t.name AS task, d.date AS deadline_date, d.priority, s.name AS state, d.note
@@ -447,10 +453,10 @@ server<- function(input, output, session) {
           defaultSortOrder = "desc",
           style = function(value) {
             days <- as.Date(value) - Sys.Date()
-            color <- if (days < 2) "red"
+            color <- if (is.na(days)) NULL
+            else if (days < 2) "red"
             else if (days < 7) "yellow"
             else NULL
-            list(background = color)
           }
         ),
         deadline_id = colDef(show = FALSE)
@@ -461,6 +467,7 @@ server<- function(input, output, session) {
   ## Filter data for plot ##
 
   filtered_deadlines <- reactive({
+    # req (v$data)
     
     df_filtered <- dbGetQuery(db, 'SELECT d.deadline_id, c.name AS subject, t.name AS task, d.date AS deadline_date, d.priority, s.name AS state, d.note
                   FROM deadline d
@@ -468,12 +475,13 @@ server<- function(input, output, session) {
                   JOIN task t ON d.task_id = t.task_id
                   JOIN state s ON d.state_id = s.state_id
                   WHERE d.is_deleted = 0')    %>%
+    # df_filtered <- v$data %>%
       mutate(
         deadline_date = as.Date(deadline_date),
         month         = factor(format(deadline_date, "%b"),
                                levels = month.abb)
       )
-    # cat("Original row count:", nrow(df_filtered), "\n")
+    cat("Original row count:", nrow(df_filtered), "\n")
 
     if (length(input$subject) > 0) {
       df_filtered <- df_filtered %>% filter(subject %in% input$subject)
