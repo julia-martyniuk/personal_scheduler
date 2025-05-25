@@ -2,24 +2,25 @@
 % Please edit documentation in R/simulate_burnout.R
 \name{simulate_burnout}
 \alias{simulate_burnout}
-\title{Simulate Burnout Forecast}
+\title{Simulate burnout risk over time}
 \usage{
 simulate_burnout(n_tasks, p, threshold = 3, days = 30, reps = 1000)
 }
 \arguments{
-\item{n_tasks}{Integer. Number of deadlines pending.}
+\item{n_tasks}{Initial number of pending tasks.}
 
-\item{p}{Numeric. Completion probability (0–1).}
+\item{p}{Probability of completing each task (0 to 1).}
 
-\item{threshold}{Integer. Max tasks before burnout risk.}
+\item{threshold}{Threshold of pending tasks that triggers burnout risk.}
 
-\item{days}{Integer. Simulation window (default 30).}
+\item{days}{Total days to simulate.}
 
-\item{reps}{Integer. Repetitions (default 1000).}
+\item{reps}{Number of simulation repetitions.}
 }
 \value{
-Data frame with burnout probabilities
+A data frame with columns \code{Day} and \code{BurnoutRisk}.
 }
 \description{
-Simulate Burnout Forecast
+runs a Monte Carlo simulation to estimate the probability of exceeding a burnout threshold
+over a specified number of days.
 }

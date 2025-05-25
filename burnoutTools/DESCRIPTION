@@ -1,15 +1,15 @@
 Package: burnoutTools
-Title: What the Package Does (One Line, Title Case)
-Version: 0.0.0.9000
+Title: Tools for simulating academic burnout
+Version: 0.1.0
 Authors@R: 
-    person("Tseeltuul", "Erdenebat", , "tseeleee.bay@gmail.com", role = c("aut", "cre"))
-Description: What the package does (one paragraph).
-License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
-    license
+    person("Tseeltuul", "Erdenebat", email = "tseeleee.bay@gmail.com", role = c("aut", "cre"))
+Description: Provides a simulation-based tool for projecting burnout risk over time using C++ and visualized through ggplot2.
+License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
 LinkingTo: 
     Rcpp
 Imports: 
-    Rcpp
+    Rcpp,
+    ggplot2

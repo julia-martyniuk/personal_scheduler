@@ -1,34 +1,38 @@
 #include <Rcpp.h>
 using namespace Rcpp;
 
-#include <Rcpp.h>
-using namespace Rcpp;
-
 // [[Rcpp::export]]
 DataFrame simulate_burnout_cpp(int n_tasks, double p, int threshold, int days, int reps) {
-  std::vector<double> risk(days, 0.0);
-  
+  std::vector<double> burnout_prob(days, 0.0);
+
   for (int r = 0; r < reps; ++r) {
-    int pending = n_tasks;
+    int pending_tasks = n_tasks;
+
     for (int d = 0; d < days; ++d) {
-      int completed = 0;
-      for (int t = 0; t < pending; ++t) {
-        if (R::runif(0, 1) < p) {
-          ++completed;
+      int completed_tasks = 0;
+
+      // Bernoulli trial for each task
+      for (int t = 0; t < pending_tasks; ++t) {
+        if (R::runif(0.0, 1.0) < p) {
+          completed_tasks++;
         }
       }
-      pending = std::max(0, pending - completed);
-      if (pending > threshold) {
-        risk[d] += 1.0;
+
+      pending_tasks = std::max(0, pending_tasks - completed_tasks);
+
+      if (pending_tasks > threshold) {
+        burnout_prob[d] += 1.0;
       }
     }
   }
-  
-  for (int d = 0; d < days; ++d) {
-    risk[d] /= reps;
+
+  // Normalize to probability
+  for (double &val : burnout_prob) {
+    val /= reps;
   }
-  
-  IntegerVector day_seq = seq(1, days);
-  return DataFrame::create(Named("Day") = day_seq,
-                           Named("BurnoutRisk") = risk);
+
+  return DataFrame::create(
+    Named("Day") = seq(1, days),
+    Named("BurnoutRisk") = burnout_prob
+  );
 }

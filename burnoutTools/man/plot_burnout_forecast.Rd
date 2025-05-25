@@ -7,11 +7,11 @@
 plot_burnout_forecast(df)
 }
 \arguments{
-\item{df}{Dataframe from simulate_burnout()}
+\item{df}{A data frame returned by \code{simulate_burnout()}, with \code{Day} and \code{BurnoutRisk} columns.}
 }
 \value{
-A ggplot object
+A ggplot2 object.
 }
 \description{
-Plot Burnout Forecast
+Produces a line plot of simulated burnout risk over time.
 }

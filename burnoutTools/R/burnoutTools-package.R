@@ -1,9 +1,10 @@
-#' burnoutTools: Tools for Tracking and Preventing Burnout
+#' burnoutTools: Tools for tracking and preventing Burnout
 #'
 #' The burnoutTools package provides functions and models to help assess workload, rest patterns, and potential burnout risk.
 #'
 #' @docType package
 #' @name burnoutTools
+#' @keywords internal
 "_PACKAGE"
 
 ## usethis namespace: start

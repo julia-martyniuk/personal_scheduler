@@ -1,13 +1,24 @@
-#' Simulate Burnout Forecast
+#' Simulate burnout risk over time
 #'
-#' @param n_tasks Integer. Number of deadlines pending.
-#' @param p Numeric. Completion probability (0–1).
-#' @param threshold Integer. Max tasks before burnout risk.
-#' @param days Integer. Simulation window (default 30).
-#' @param reps Integer. Repetitions (default 1000).
+#' runs a Monte Carlo simulation to estimate the probability of exceeding a burnout threshold
+#' over a specified number of days.
 #'
-#' @return Data frame with burnout probabilities
+#' @param n_tasks Initial number of pending tasks.
+#' @param p Probability of completing each task (0 to 1).
+#' @param threshold Threshold of pending tasks that triggers burnout risk.
+#' @param days Total days to simulate.
+#' @param reps Number of simulation repetitions.
+#'
+#' @return A data frame with columns `Day` and `BurnoutRisk`.
 #' @export
 simulate_burnout <- function(n_tasks, p, threshold = 3, days = 30, reps = 1000) {
+  stopifnot(
+    is.numeric(n_tasks), n_tasks >= 0,
+    is.numeric(p), p >= 0, p <= 1,
+    is.numeric(threshold), threshold >= 0,
+    is.numeric(days), days > 0,
+    is.numeric(reps), reps > 0
+  )
+
   simulate_burnout_cpp(n_tasks, p, threshold, days, reps)
 }

@@ -2,6 +2,7 @@
 # install.packages("reactable")
 # install.packages("RSQLite")
 # install.packages("shinyalert")
+# devtools::install("burnoutTools")
 
 library(shiny)
 library(shinythemes)
@@ -13,6 +14,8 @@ library(dplyr)
 library(ggplot2)
 library(shinyalert) 
 library(bslib)
+library(burnoutTools) # custom package which contains C++ implementations via Rcpp
+
 ####################################
 # Define classes                   #
 ####################################
@@ -95,9 +98,9 @@ setState.Deadline <- function(x, state, note = "") {
 ####################################
 
 validate_note <- function(note){
-    if (!is.character(note)) {
-      stop("Note must be a string.")
-    }
+  if (!is.character(note)) {
+    stop("Note must be a string.")
+  }
   
   if (nchar(note) > 60){
     print("There is more than 60 characters")
@@ -105,7 +108,7 @@ validate_note <- function(note){
   }
   return(TRUE)
 }
-  
+
 ####################################
 # Connect database                #
 ####################################
@@ -114,7 +117,7 @@ db <- dbConnect(RSQLite::SQLite(), "scheduler.db")
 ####################################
 # Read the data                    #
 ####################################
-  
+
 program <- dbGetQuery(db, "SELECT * FROM course")
 statuses <- dbGetQuery(db, "SELECT name FROM state")
 tasks <- dbGetQuery(db, "SELECT name FROM task")
@@ -124,66 +127,92 @@ subjects <- dbGetQuery(db, "SELECT name FROM course")
 # UI                               #
 ####################################
 ui <- navbarPage("Personal Scheduler",
-       theme = bs_theme(version = 5, bootswatch = "cerulean"),
-       tabPanel("Current Schedule",          
-        fluidPage(
-          useShinyalert(),
-          # theme = shinytheme("flatly"),
-          h2('My deadlines'),
-          fluidRow(
-            column(width = 3,
-                   div(h4("Add new deadline"),
-                       
-                   selectInput("subject", label = "Subject", 
-                                   choices = subjects, 
-                                   selected = NULL),
-                       
-                   selectInput("task", label = "Task", 
-                                   choices = tasks, 
-                                   selected = NULL),
-                       
-                   dateInput("deadline_date", 
-                                 label = "Deadline date",
-                                 format = "yyyy-mm-dd"),
-                       
-                   actionButton("addbutton", "Add new deadline",
-                                class = "btn btn-primary"),
-                   actionButton("extractbutton", "Extract to csv",
-                                class = "btn btn-secondary")),
-                   tags$hr(),
-                   
-                   div(h4("Change selected items"),
-                       
-                   selectInput("cr_state", label = "Current state", 
-                                   choices = statuses, 
-                                   selected = NULL),
-                   textInput("new_note", label = "Leave a note", 
-                             placeholder = "max 60 symbols"),
-                       
-                   actionButton("updateselected", "Update selected item",
-                                class = "btn btn-primary" ), 
-                   actionButton("deletebutton", "Delete",
-                                class = "btn btn-warning"))),
-            
-            column(width = 9,reactableOutput("new_deadline")),
-            verbatimTextOutput("selected")
-  ))),
-      tabPanel("Progress",
-               fluidPage(
-                 # theme = shinytheme("flatly"),
-                 h2("Check your progress"),
-                 fluidRow(
-                   column(width = 3,
-                          div(h4("Filter by"),
-                          selectInput("prog_subject", label = "Subject", choices = subjects, multiple = TRUE),
-                          selectInput("prog_task", label = "Task", choices = tasks, multiple = TRUE),
-                          selectInput("prog_state", label = "State", choices = statuses, multiple = TRUE),
-                          selectInput("prog_month", label = "Month", choices = c(`(All)` = "", month.abb))
-                 )),
-                 column(width = 9,plotOutput("progress_plot")))
+                 theme = bs_theme(version = 5, bootswatch = "cerulean"),
+                 tabPanel("Current Schedule",          
+                          fluidPage(
+                            useShinyalert(),
+                            # theme = shinytheme("flatly"),
+                            h2('My deadlines'),
+                            fluidRow(
+                              column(width = 3,
+                                     div(h4("Add new deadline"),
+                                         
+                                         selectInput("subject", label = "Subject", 
+                                                     choices = subjects, 
+                                                     selected = NULL),
+                                         
+                                         selectInput("task", label = "Task", 
+                                                     choices = tasks, 
+                                                     selected = NULL),
+                                         
+                                         dateInput("deadline_date", 
+                                                   label = "Deadline date",
+                                                   format = "yyyy-mm-dd"),
+                                         
+                                         actionButton("addbutton", "Add new deadline",
+                                                      class = "btn btn-primary"),
+                                         actionButton("extractbutton", "Extract to csv",
+                                                      class = "btn btn-secondary")),
+                                     tags$hr(),
+                                     
+                                     div(h4("Change selected items"),
+                                         
+                                         selectInput("cr_state", label = "Current state", 
+                                                     choices = statuses, 
+                                                     selected = NULL),
+                                         textInput("new_note", label = "Leave a note", 
+                                                   placeholder = "max 60 symbols"),
+                                         
+                                         actionButton("updateselected", "Update selected item",
+                                                      class = "btn btn-primary" ), 
+                                         actionButton("deletebutton", "Delete",
+                                                      class = "btn btn-warning"))),
+                              
+                              column(width = 9,reactableOutput("new_deadline")),
+                              verbatimTextOutput("selected")
+                            ))),
+                 tabPanel("Progress",
+                          fluidPage(
+                            # theme = shinytheme("flatly"),
+                            h2("Check your progress"),
+                            fluidRow(
+                              column(width = 3,
+                                     div(h4("Filter by"),
+                                         selectInput("prog_subject", label = "Subject", choices = subjects, multiple = TRUE),
+                                         selectInput("prog_task", label = "Task", choices = tasks, multiple = TRUE),
+                                         selectInput("prog_state", label = "State", choices = statuses, multiple = TRUE),
+                                         selectInput("prog_month", label = "Month", choices = c(`(All)` = "", month.abb))
+                                     )),
+                              column(width = 9,plotOutput("progress_plot")))
+                            
+                          )), 
+                 tabPanel("Forecast",
+                          fluidPage(
+                            h2("Burnout risk forecast"),
+                            p("This tool simulates your risk of burnout based on task load, productivity, and threshold. Adjust the inputs and click 'Simulate' to generate a forecast."),
+                            
+                            sidebarLayout(
+                              sidebarPanel(
+                                numericInput("n_tasks", "Pending tasks", value = 8, min = 1, step = 1),
+                                sliderInput("p_success", "Productivity (% of tasks completed per day)", min = 10, max = 100, value = 60, step = 5),
+                                numericInput("burnout_threshold", "Burnout threshold (tasks)", value = 3, min = 1, max = 20),
+                                
+                                tags$details(
+                                  tags$summary("Advanced options"),
+                                  numericInput("forecast_days", "Forecast duration (days)", value = 30, min = 5, max = 90),
+                                  numericInput("forecast_reps", "Simulations (repetitions)", value = 100, min = 10, max = 1000)
+                                ),
+                                
+                                actionButton("simulate_burnout", "Simulate", class = "btn btn-primary")
+                              ),
+                              mainPanel(
+                                plotOutput("burnout_plot"),
+                                helpText("Interpretation: The plot shows your estimated risk of burnout over time based on your settings. Burnout risk increases when tasks exceed the threshold.")
+                              )
+                            )
+                          )
+                 )
                  
-               ))
-  
 )
 
 ####################################
@@ -197,7 +226,7 @@ server<- function(input, output, session) {
   
   ## Welcome alert ##
   observe({
-      upcoming_deadlines <- dbGetQuery(db, "
+    upcoming_deadlines <- dbGetQuery(db, "
                  SELECT course_id 
                  FROM deadline 
                  WHERE date BETWEEN DATE('now', '+1 days')
@@ -210,7 +239,7 @@ server<- function(input, output, session) {
                WHERE date BETWEEN DATE('now') 
                AND DATE('now', '+0 days') 
                AND is_deleted = 0")
-
+    
     missed_deadlines <- dbGetQuery(db, "
                SELECT course_id  
                FROM deadline 
@@ -230,7 +259,7 @@ server<- function(input, output, session) {
       text = alert_text,
       type = "info"
     )
-
+    
   })
   
   
@@ -251,10 +280,10 @@ server<- function(input, output, session) {
       arrange(deadline_date)
   })
   
-
+  
   selected <- reactive(getReactableState("new_deadline", "selected"))
   
-
+  
   ## Add new deadline ##
   
   observeEvent(input$addbutton,{
@@ -297,16 +326,16 @@ server<- function(input, output, session) {
                   JOIN task t ON d.task_id = t.task_id
                   JOIN state s ON d.state_id = s.state_id
                   WHERE d.is_deleted = 0')
-  
+    
     # Re-render the plot after adding a new record
     plot_trigger(plot_trigger() + 1)
   })
   
   ## Extract schedule to csv file ##
   observeEvent(input$extractbutton,{
-
+    
     print('Extract Button clicked...')
-
+    
     write.table(v$data,
                 file = "deadlines.csv",
                 sep = ",",
@@ -314,7 +343,7 @@ server<- function(input, output, session) {
                 quote = TRUE,
                 col.names = colnames(v$data),
                 row.names = FALSE)
-
+    
   })
   
   ## Update deadline item ##
@@ -397,7 +426,7 @@ server<- function(input, output, session) {
             UPDATE deadline
             SET is_deleted = TRUE
             WHERE deadline_id IN (%s)",
-          ph
+                ph
         ),
         params = params
       )
@@ -410,6 +439,9 @@ server<- function(input, output, session) {
                   JOIN task t ON d.task_id = t.task_id
                   JOIN state s ON d.state_id = s.state_id
                   WHERE d.is_deleted = 0')
+    
+    # Re-render the plot after deleting a record
+    plot_trigger(plot_trigger() + 1)
   })
   
   ## Render table ##
@@ -462,8 +494,36 @@ server<- function(input, output, session) {
     )
   })
   
+  # Burnout simulation logic
+  observeEvent(input$simulate_burnout, {
+    # Defensive input validation
+    if (input$n_tasks < 1 || input$forecast_days < 1 || input$forecast_reps < 1) {
+      showModal(modalDialog(
+        title = "Input Error",
+        "Please make sure all numeric inputs are positive and meaningful.",
+        easyClose = TRUE
+      ))
+      return()
+    }
+    
+    req(input$n_tasks, input$p_success, input$burnout_threshold, 
+        input$forecast_days, input$forecast_reps)
+    
+    df <- simulate_burnout(
+      n_tasks = input$n_tasks,
+      p = input$p_success / 100,
+      threshold = input$burnout_threshold,
+      days = input$forecast_days,
+      reps = input$forecast_reps
+    )
+    # Render forecast plot
+    output$burnout_plot <- renderPlot({
+      plot_burnout_forecast(df)
+    })
+  })
+  
   ## Filter data for plot ##
-
+  
   filtered_deadlines <- reactive({
     # req (v$data)
     
@@ -477,14 +537,14 @@ server<- function(input, output, session) {
                   JOIN task t ON d.task_id = t.task_id
                   JOIN state s ON d.state_id = s.state_id
                   WHERE d.is_deleted = 0')    %>%
-    # df_filtered <- v$data %>%
+      # df_filtered <- v$data %>%
       mutate(
         deadline_date = as.Date(deadline_date),
         month         = factor(format(deadline_date, "%b"),
                                levels = month.abb)
       )
     cat("Original row count:", nrow(df_filtered), "\n")
-
+    
     if (length(input$prog_subject) > 0) {
       df_filtered <- df_filtered %>% filter(subject %in% input$prog_subject)
       # cat("After subject filter:", nrow(df_filtered), "\n")
@@ -502,7 +562,7 @@ server<- function(input, output, session) {
       # cat("After month filter:", nrow(df_filtered), "\n")
     }
     df_filtered
-})
+  })
   
   
   ## Render plot ##
@@ -523,23 +583,23 @@ server<- function(input, output, session) {
       geom_bar(stat = "identity", position = "stack") +
       labs(title = "Task Count by State", x = "Month", y = "Number of Tasks") +
       theme_minimal()
-    })
+  })
 }
 
-  
-  # Test outputs and button behavior 
-  # observe({
-  #   print(v$data)
-  # })
-  # 
-  # output$selected <- renderPrint({
-  #   print(selected())
-  # })
-  # 
-  # observe({
-  #   print(v$data[selected(), ])
-  # })
-  
+
+# Test outputs and button behavior 
+# observe({
+#   print(v$data)
+# })
+# 
+# output$selected <- renderPrint({
+#   print(selected())
+# })
+# 
+# observe({
+#   print(v$data[selected(), ])
+# })
+
 ####################################
 # Create the shiny app             #
 ####################################

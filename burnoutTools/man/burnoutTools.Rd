@@ -4,7 +4,7 @@
 \name{burnoutTools}
 \alias{burnoutTools-package}
 \alias{burnoutTools}
-\title{burnoutTools: Tools for Tracking and Preventing Burnout}
+\title{burnoutTools: Tools for tracking and preventing Burnout}
 \description{
 The burnoutTools package provides functions and models to help assess workload, rest patterns, and potential burnout risk.
 }
@@ -12,3 +12,4 @@ The burnoutTools package provides functions and models to help assess workload, 
 \strong{Maintainer}: Tseeltuul Erdenebat \email{tseeleee.bay@gmail.com}
 
 }
+\keyword{internal}
