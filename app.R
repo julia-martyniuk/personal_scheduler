@@ -188,14 +188,21 @@ ui <- navbarPage("Personal Scheduler",
                           )), 
                  tabPanel("Forecast",
                           fluidPage(
-                            h2("Burnout risk forecast"),
-                            p("This tool simulates your risk of burnout based on task load, productivity, and threshold. Adjust the inputs and click 'Simulate' to generate a forecast."),
+                            h2("Burnout Risk Forecast"),
+                            p("Simulate your estimated burnout risk over time. Adjust task load, productivity, and burnout threshold to forecast outcomes."),
                             
                             sidebarLayout(
                               sidebarPanel(
+                                checkboxInput("auto_tasks", "Estimate tasks from schedule", value = FALSE),
                                 numericInput("n_tasks", "Pending tasks", value = 8, min = 1, step = 1),
+                                textOutput("task_info"),
+                                
                                 sliderInput("p_success", "Productivity (% of tasks completed per day)", min = 10, max = 100, value = 60, step = 5),
-                                numericInput("burnout_threshold", "Burnout threshold (tasks)", value = 3, min = 1, max = 20),
+                                numericInput("burnout_threshold", 
+                                             label = tagList("Burnout threshold", 
+                                                             tags$small("(When pending tasks exceed this number, burnout risk increases)")
+                                             ), 
+                                             value = 3, min = 1, max = 20),
                                 
                                 tags$details(
                                   tags$summary("Advanced options"),
@@ -203,17 +210,21 @@ ui <- navbarPage("Personal Scheduler",
                                   numericInput("forecast_reps", "Simulations (repetitions)", value = 100, min = 10, max = 1000)
                                 ),
                                 
-                                actionButton("simulate_burnout", "Simulate", class = "btn btn-primary")
+                                actionButton("simulate_burnout", "Simulate", class = "btn btn-primary"),
+                                br(), br(),
+                                uiOutput("forecast_package_version")
                               ),
+                              
                               mainPanel(
-                                plotOutput("burnout_plot"),
-                                helpText("Interpretation: The plot shows your estimated risk of burnout over time based on your settings. Burnout risk increases when tasks exceed the threshold.")
+                                shinycssloaders::withSpinner(plotOutput("burnout_plot")),
+                                helpText("Each line represents one simulation. Burnout risk spikes when pending tasks exceed your burnout threshold. Frequent high-risk episodes suggest burnout is likely."),
+                                uiOutput("peak_gauge_ui") 
                               )
                             )
                           )
                  )
-                 
 )
+                 
 
 ####################################
 # Server                           #
@@ -494,34 +505,93 @@ server<- function(input, output, session) {
     )
   })
   
-  # Burnout simulation logic
-  observeEvent(input$simulate_burnout, {
-    # Defensive input validation
-    if (input$n_tasks < 1 || input$forecast_days < 1 || input$forecast_reps < 1) {
-      showModal(modalDialog(
-        title = "Input Error",
-        "Please make sure all numeric inputs are positive and meaningful.",
-        easyClose = TRUE
-      ))
-      return()
-    }
-    
-    req(input$n_tasks, input$p_success, input$burnout_threshold, 
-        input$forecast_days, input$forecast_reps)
-    
-    df <- simulate_burnout(
-      n_tasks = input$n_tasks,
-      p = input$p_success / 100,
-      threshold = input$burnout_threshold,
-      days = input$forecast_days,
-      reps = input$forecast_reps
-    )
-    # Render forecast plot
-    output$burnout_plot <- renderPlot({
-      plot_burnout_forecast(df)
-    })
+  # Show package version
+  output$forecast_package_version <- renderUI({
+    HTML(paste0(
+      "<div style='font-size: 12px; color: grey;'>burnoutTools version: ",
+      as.character(packageVersion("burnoutTools")),
+      "</div>"
+    ))
   })
   
+# Store simulation results reactively
+df_reactive <- reactiveVal(NULL)
+
+# Count unfinished tasks from schedule data
+auto_task_count <- reactive({
+  req(v$data)
+  unfinished <- v$data %>% filter(state != "done" & state != "cancelled")
+  nrow(unfinished)
+})
+
+# Show task info text based on auto_tasks checkbox
+output$task_info <- renderText({
+  if (isTRUE(input$auto_tasks)) {
+    count <- auto_task_count()
+    if (count == 0) "No pending tasks detected. Using manual input."
+    else paste("Detected", count, "pending task(s).")
+  } else {
+    ""
+  }
+})
+
+# Determine number of tasks for simulation
+sim_n_tasks <- reactive({
+  if (isTRUE(input$auto_tasks)) {
+    count <- auto_task_count()
+    if (count == 0) input$n_tasks else count
+  } else {
+    input$n_tasks
+  }
+})
+
+# Run simulation on button click
+observeEvent(input$simulate_burnout, {
+  if (sim_n_tasks() < 1 || input$forecast_days < 1 || input$forecast_reps < 1) {
+    showModal(modalDialog(title = "Input Error",
+                          "Please ensure all numeric inputs are positive.",
+                          easyClose = TRUE))
+    return()
+  }
+  
+  req(sim_n_tasks(), input$p_success, input$burnout_threshold, input$forecast_days, input$forecast_reps)
+  
+  df <- burnoutTools::simulate_burnout(
+    n_tasks = sim_n_tasks(),
+    p = input$p_success / 100,
+    threshold = input$burnout_threshold,
+    days = input$forecast_days,
+    reps = input$forecast_reps
+  )
+  
+  df_reactive(df)
+})
+
+# Plot the simulation results
+output$burnout_plot <- renderPlot({
+  req(df_reactive())
+  df <- df_reactive()
+  
+  validate(
+    need(nrow(df) > 0, "No simulation data."),
+    need("pending_tasks" %in% colnames(df), "Missing column 'pending_tasks'."),
+    need("sim" %in% colnames(df), "Missing column 'sim'.")
+  )
+  
+  plot_burnout_forecast(df)
+})
+
+# Show average peak workload summary
+output$peak_gauge_ui <- renderUI({
+  req(df_reactive())
+  df_summary <- df_reactive() %>%
+    group_by(sim) %>%
+    summarise(max_pending = max(pending_tasks), .groups = "drop")
+  
+  avg_peak <- mean(df_summary$max_pending, na.rm = TRUE)
+  HTML(paste0("<b>Average peak workload:</b> ", round(avg_peak, 2), " tasks"))
+})
+
   ## Filter data for plot ##
   
   filtered_deadlines <- reactive({
