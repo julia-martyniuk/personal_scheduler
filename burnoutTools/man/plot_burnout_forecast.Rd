@@ -2,18 +2,17 @@
 % Please edit documentation in R/plot_burnout_forecast.R
 \name{plot_burnout_forecast}
 \alias{plot_burnout_forecast}
-\title{Plot Burnout Forecast}
+\title{Plot burnout forecast}
 \usage{
 plot_burnout_forecast(df)
 }
 \arguments{
-\item{df}{A data frame returned by simulate_burnout().}
+\item{df}{Data frame returned by simulate_burnout()}
 }
 \value{
-A ggplot object displaying burnout risk and task pressure.
+A ggplot line chart showing how workload, stress, and fatigue evolve.
 }
 \description{
-This function visualizes the forecasted burnout risk and task load over time.
-It is designed to assist with interpreting simulation output by showing how
-both burnout risk and average pending tasks evolve.
+This version shows Burnout Risk, Task Load, and Fatigue together
+with a highlighted burnout risk zone.
 }

@@ -2,46 +2,97 @@
 using namespace Rcpp;
 
 // [[Rcpp::export]]
-DataFrame simulate_burnout_cpp(int n_tasks, double p, int threshold, int days, int reps) {
-  // Vectors to accumulate daily burnout risk and average pending tasks over all simulations
+DataFrame simulate_burnout_cpp(int n_tasks, double p, int threshold, int days, int reps, double task_arrival_rate = 0.5) {
+  // Initialize vectors to hold aggregated results across all repetitions
   std::vector<double> risk(days, 0.0);
   std::vector<double> avg_pending(days, 0.0);
+  std::vector<double> fatigue(days, 0.0);
+  std::vector<int> over_threshold_count(days, 0);
 
-  // Initialize RNG scope to ensure proper random number generation in R context
+  // Trackers for summary statistics
+  int total_high_risk_days = 0;
+  double max_fatigue = 0.0;
+  int peak_day = 0;
+  double peak_risk = 0.0;
+
+  // Set RNG scope for Rcpp
   Rcpp::RNGScope rngScope;
 
-  // Run 'reps' independent simulations
   for (int r = 0; r < reps; ++r) {
-    int pending = n_tasks;  // Start with all tasks pending at day 0
+    int pending = n_tasks;
+    double productivity = p;
 
-    // Simulate day-by-day task completion and burnout risk accumulation
+    std::vector<double> risk_this_run(days, 0.0);
+    std::vector<double> fatigue_this_run(days, 0.0);
+
     for (int d = 0; d < days; ++d) {
-      // Number of completed tasks follows a binomial distribution: completed ~ Binomial(pending, p)
-      int completed = R::rbinom(pending, p);
+      // Simulate task arrivals using Poisson distribution
+      int new_tasks = R::rpois(task_arrival_rate);
+      pending += new_tasks;
 
-      // Update remaining pending tasks, ensuring non-negative
-      pending = std::max(0, pending - completed);
-
-      // If pending tasks exceed threshold, increment burnout risk count for this day
-      if (pending > threshold) {
-        risk[d] += 1.0;
+      // Adjust productivity based on previous day's overload status
+      if (d > 0) {
+        if (over_threshold_count[d - 1] > 0) {
+          productivity *= 0.98;  // productivity decreases (fatigue)
+        } else {
+          productivity *= 1.01;  // small recovery
+        }
       }
 
-      // Accumulate pending tasks for averaging later
+      // Limit productivity to [0.1, 1.0]
+      productivity = std::min(1.0, std::max(0.1, productivity));
+
+      // Simulate task completions (binomial draw)
+      int completed = R::rbinom(pending, productivity);
+      pending = std::max(0, pending - completed);
+
+      // Accumulate values for this day
       avg_pending[d] += pending;
+
+      // Burnout risk increases with backlog (logistic growth)
+      double risk_today = 1.0 / (1.0 + std::exp(-0.8 * (pending - threshold)));
+      risk[d] += risk_today;
+      risk_this_run[d] = risk_today;
+
+      // Fatigue is calculated from productivity loss
+      double fatigue_today = (1.0 - productivity);
+      fatigue[d] += fatigue_today;
+      fatigue_this_run[d] = fatigue_today;
+
+      // Check if workload exceeded burnout threshold
+      if (pending > threshold) {
+        over_threshold_count[d]++;
+      }
+    }
+
+    // Update summary statistics for this run
+    for (int d = 0; d < days; ++d) {
+      if (risk_this_run[d] > 0.7) total_high_risk_days++;
+      if (risk_this_run[d] > peak_risk) {
+        peak_risk = risk_this_run[d];
+        peak_day = d + 1;
+      }
+      if (fatigue_this_run[d] > max_fatigue) {
+        max_fatigue = fatigue_this_run[d];
+      }
     }
   }
 
-  // Average the results over the number of repetitions
+  // Average results across all simulations
   for (int d = 0; d < days; ++d) {
     risk[d] /= reps;
     avg_pending[d] /= reps;
+    fatigue[d] /= reps;
   }
 
-  // Return a data frame with daily values of burnout risk and average pending tasks
+  // Return results as an R data frame
   return DataFrame::create(
     Named("Day") = seq(1, days),
     Named("BurnoutRisk") = risk,
-    Named("AvgPendingTasks") = avg_pending
+    Named("AvgPendingTasks") = avg_pending,
+    Named("Fatigue") = fatigue,
+    Named("Summary_HighRiskDays") = total_high_risk_days / double(reps),
+    Named("Summary_PeakRiskDay") = peak_day,
+    Named("Summary_MaxFatigue") = max_fatigue
   );
 }

@@ -2,27 +2,47 @@
 % Please edit documentation in R/simulate_burnout.R
 \name{simulate_burnout}
 \alias{simulate_burnout}
-\title{Simulate burnout risk over time}
+\title{Simulate burnout risk over time with dynamic workload}
 \usage{
-simulate_burnout(n_tasks, p, threshold = 3, days = 30, reps = 1000, seed = 123)
+simulate_burnout(
+  n_tasks,
+  p,
+  threshold = 3,
+  days = 30,
+  reps = 1000,
+  task_arrival_rate = 0.5,
+  seed = 123
+)
 }
 \arguments{
-\item{n_tasks}{Integer. Initial number of pending tasks.}
+\item{n_tasks}{Integer. Number of pending tasks at Day 0.}
 
-\item{p}{Numeric. Probability of completing a task on a given day (0 to 1).}
+\item{p}{Numeric. Initial daily productivity (as a probability between 0 and 1).}
 
-\item{threshold}{Integer. Burnout is likely if pending tasks exceed this number.}
+\item{threshold}{Integer. Burnout threshold — risk increases if pending tasks exceed this value.}
 
-\item{days}{Integer. Number of days to simulate.}
+\item{days}{Integer. Number of simulation days.}
 
-\item{reps}{Integer. Number of simulation repetitions to average over.}
+\item{reps}{Integer. Number of repetitions for averaging.}
 
-\item{seed}{Integer. Random seed for reproducibility. Default is 123.}
+\item{task_arrival_rate}{Numeric. Average number of new tasks arriving per day (Poisson-distributed).}
+
+\item{seed}{Integer. Optional random seed for reproducibility.}
 }
 \value{
-A data frame with daily average burnout risk and average pending tasks.
+A data frame with the following columns:
+\describe{
+\item{Day}{Simulation day (1, 2, ..., days)}
+\item{BurnoutRisk}{Average estimated burnout risk per day}
+\item{AvgPendingTasks}{Average pending task count per day}
+\item{Fatigue}{Average daily productivity loss}
+\item{Summary_HighRiskDays}{Average number of days with burnout risk > 0.7}
+\item{Summary_PeakRiskDay}{Day when burnout risk peaked}
+\item{Summary_MaxFatigue}{Maximum observed fatigue across the simulation}
+}
 }
 \description{
-This function estimates burnout risk through Monte Carlo simulation,
-assuming a given task load, daily productivity, and burnout threshold.
+This function performs a Monte Carlo simulation of task backlog and burnout risk over time.
+It models daily task arrivals, task completions based on productivity, and feedback effects
+such as fatigue (which lowers productivity) and recovery (which restores it gradually).
 }
