@@ -1,6 +1,8 @@
 # burnoutTools
 
-This R package was created as part of a final project for the Advanced Programming in R course. It provides a tool to simulate and visualize burnout risk based on task completion behavior. The simulation is implemented in C++ using Rcpp, and the output is visualized using ggplot2.
+`burnoutTools` is an R package developed as part of a group project for the **Advanced Programming in R** course. It simulates and visualizes burnout risk based on task completion behavior. The simulation is written in C++ via Rcpp, and results are visualized using ggplot2.
+
+---
 
 ## Features
 
@@ -31,15 +33,10 @@ plot_burnout_forecast(df)
 
 ## Functions
 
-* `simulate_burnout()` – Runs the burnout simulation
-* `plot_burnout_forecast()` – Visualizes the result using ggplot2
+* `simulate_burnout()` – runs the burnout simulation
+* `plot_burnout_forecast()` – creates a simple plot with ggplot2
 
 ## Purpose
 
-This package was developed to extend the functionality of a Shiny-based scheduler application by adding a burnout forecasting feature. It demonstrates integration of C++ with R through Rcpp and packaging tools learned in the course.
+This package was created to extend a Shiny-based personal scheduler app by adding a burnout forecast feature. It was also a way for us to apply what I learned about writing R packages and integrating C++ with R through Rcpp.
 
-## Author
-
-Tseeltuul Erdenebat
-University of Warsaw
-[tseeleee.bay@gmail.com](mailto:tseeleee.bay@gmail.com)
