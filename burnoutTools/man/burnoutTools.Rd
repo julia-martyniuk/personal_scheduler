@@ -4,12 +4,13 @@
 \name{burnoutTools}
 \alias{burnoutTools-package}
 \alias{burnoutTools}
-\title{burnoutTools: Tools for tracking and preventing Burnout}
+\title{burnoutTools: Tools for Tracking and Preventing Burnout}
 \description{
-The burnoutTools package provides functions and models to help assess workload, rest patterns, and potential burnout risk.
+This package provides basic tools for simulating task-based burnout risk over time.
+It combines simple probability models with visualization functions to help explore
+how workload and recovery thresholds may affect long-term burnout risk.
 }
 \author{
 \strong{Maintainer}: Tseeltuul Erdenebat \email{tseeleee.bay@gmail.com}
 
 }
-\keyword{internal}

@@ -2,7 +2,7 @@
 # install.packages("reactable")
 # install.packages("RSQLite")
 # install.packages("shinyalert")
-# devtools::install("burnoutTools")
+# devtools::load_all("burnoutTools")
 
 library(shiny)
 library(shinythemes)
@@ -188,37 +188,64 @@ ui <- navbarPage("Personal Scheduler",
                           )), 
                  tabPanel("Forecast",
                           fluidPage(
-                            h2("Burnout Risk Forecast"),
-                            p("Simulate your estimated burnout risk over time. Adjust task load, productivity, and burnout threshold to forecast outcomes."),
+                            h2("Burnout Forecast"),
+                            
+                            p("This tool estimates how your workload, fatigue, and burnout risk may evolve in the next few weeks. 
+             The model simulates how task pressure and recovery interact over time."),
+                            
+                            tags$details(
+                              tags$summary("How the model works"),
+                              tags$ul(
+                                tags$li("You start with a number of unfinished tasks."),
+                                tags$li("Each day, your productivity determines how many tasks you complete."),
+                                tags$li("New tasks arrive randomly each day based on the rate you set."),
+                                tags$li("If your backlog exceeds a threshold, burnout risk increases."),
+                                tags$li("Prolonged overload causes fatigue, which reduces future productivity."),
+                                tags$li("If workload stays low, fatigue gradually recovers."),
+                                tags$li("The process is repeated multiple times to average out randomness.")
+                              )
+                            ),
                             
                             sidebarLayout(
                               sidebarPanel(
-                                checkboxInput("auto_tasks", "Estimate tasks from schedule", value = FALSE),
-                                numericInput("n_tasks", "Pending tasks", value = 8, min = 1, step = 1),
+                                h4("Simulation Settings"),
+                                
+                                checkboxInput("auto_tasks", "Estimate task count from schedule", value = FALSE),
                                 textOutput("task_info"),
                                 
-                                sliderInput("p_success", "Productivity (% of tasks completed per day)", min = 10, max = 100, value = 60, step = 5),
-                                numericInput("burnout_threshold", 
-                                             label = tagList("Burnout threshold", 
-                                                             tags$small("(When pending tasks exceed this number, burnout risk increases)")
-                                             ), 
+                                numericInput("n_tasks", "Pending tasks (manual entry)", value = 8, min = 1, step = 1),
+                                
+                                sliderInput("p_success", "Productivity (% tasks completed per day)", min = 10, max = 100, value = 60, step = 5),
+                                
+                                numericInput("burnout_threshold",
+                                             label = tagList("Burnout threshold",
+                                                             tags$small("Risk increases when pending tasks exceed this number")),
                                              value = 3, min = 1, max = 20),
+                                
+                                numericInput("arrival_rate", "Average number of new tasks/day", value = 0.5, min = 0, max = 10, step = 0.1),
                                 
                                 tags$details(
                                   tags$summary("Advanced options"),
-                                  numericInput("forecast_days", "Forecast duration (days)", value = 30, min = 5, max = 90),
-                                  numericInput("forecast_reps", "Simulations (repetitions)", value = 100, min = 10, max = 1000)
+                                  numericInput("forecast_days", "Days to simulate", value = 30, min = 5, max = 90),
+                                  numericInput("forecast_reps", "Simulation repetitions", value = 100, min = 10, max = 1000)
                                 ),
                                 
-                                actionButton("simulate_burnout", "Simulate", class = "btn btn-primary"),
+                                actionButton("simulate_burnout", "Run Forecast", class = "btn btn-primary"),
                                 br(), br(),
-                                uiOutput("forecast_package_version")
+                                uiOutput("forecast_package_version"),
+                                HTML("<small style='color: #888;'>Developed as part of university coursework</small>")
                               ),
                               
                               mainPanel(
+                                h4("Forecast Plot"),
                                 shinycssloaders::withSpinner(plotOutput("burnout_plot")),
-                                helpText("Each line represents one simulation. Burnout risk spikes when pending tasks exceed your burnout threshold. Frequent high-risk episodes suggest burnout is likely."),
-                                uiOutput("peak_gauge_ui") 
+                                br(),
+                                uiOutput("summary_stats"),
+                                br(),
+                                uiOutput("peak_gauge_ui"),
+                                helpText("Note: The shaded area on the plot highlights days when estimated burnout risk is high (above 0.7). 
+                        Fatigue reduces your productivity over time when you're overloaded. 
+                        Use this forecast to reflect on whether your pace is manageable.")
                               )
                             )
                           )
@@ -561,7 +588,8 @@ server<- function(input, output, session) {
       p = input$p_success / 100,
       threshold = input$burnout_threshold,
       days = input$forecast_days,
-      reps = input$forecast_reps
+      reps = input$forecast_reps,
+      task_arrival_rate = input$arrival_rate
     )
     
     df_reactive(df)
@@ -578,6 +606,22 @@ server<- function(input, output, session) {
     )
     
     burnoutTools::plot_burnout_forecast(df)
+  })
+  
+  # Show summary metrics under the plot
+  output$summary_stats <- renderUI({
+    req(df_reactive())
+    df <- df_reactive()
+    
+    HTML(paste0(
+      "<b>Simulation Summary:</b><br/>",
+      "Days with high burnout risk (> 0.7): ",
+      round(df$Summary_HighRiskDays[1], 1), "<br/>",
+      "Day of peak burnout risk: ",
+      df$Summary_PeakRiskDay[1], "<br/>",
+      "Maximum fatigue level: ",
+      round(df$Summary_MaxFatigue[1], 2)
+    ))
   })
 
   ## Filter data for plot ##

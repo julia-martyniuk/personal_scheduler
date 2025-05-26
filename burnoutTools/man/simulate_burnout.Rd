@@ -4,23 +4,25 @@
 \alias{simulate_burnout}
 \title{Simulate burnout risk over time}
 \usage{
-simulate_burnout(n_tasks, p, threshold = 3, days = 30, reps = 1000)
+simulate_burnout(n_tasks, p, threshold = 3, days = 30, reps = 1000, seed = 123)
 }
 \arguments{
-\item{n_tasks}{Initial number of pending tasks.}
+\item{n_tasks}{Integer. Initial number of pending tasks.}
 
-\item{p}{Probability of completing each task (0 to 1).}
+\item{p}{Numeric. Probability of completing a task on a given day (0 to 1).}
 
-\item{threshold}{Threshold of pending tasks that triggers burnout risk.}
+\item{threshold}{Integer. Burnout is likely if pending tasks exceed this number.}
 
-\item{days}{Total days to simulate.}
+\item{days}{Integer. Number of days to simulate.}
 
-\item{reps}{Number of simulation repetitions.}
+\item{reps}{Integer. Number of simulation repetitions to average over.}
+
+\item{seed}{Integer. Random seed for reproducibility. Default is 123.}
 }
 \value{
-A data frame with columns \code{Day} and \code{BurnoutRisk}.
+A data frame with daily average burnout risk and average pending tasks.
 }
 \description{
-runs a Monte Carlo simulation to estimate the probability of exceeding a burnout threshold
-over a specified number of days.
+This function estimates burnout risk through Monte Carlo simulation,
+assuming a given task load, daily productivity, and burnout threshold.
 }

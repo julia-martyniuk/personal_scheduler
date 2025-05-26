@@ -11,8 +11,8 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
 // simulate_burnout_cpp
-DataFrame simulate_burnout_cpp(int n_tasks, double p, int threshold, int days, int reps);
-RcppExport SEXP _burnoutTools_simulate_burnout_cpp(SEXP n_tasksSEXP, SEXP pSEXP, SEXP thresholdSEXP, SEXP daysSEXP, SEXP repsSEXP) {
+DataFrame simulate_burnout_cpp(int n_tasks, double p, int threshold, int days, int reps, double task_arrival_rate);
+RcppExport SEXP _burnoutTools_simulate_burnout_cpp(SEXP n_tasksSEXP, SEXP pSEXP, SEXP thresholdSEXP, SEXP daysSEXP, SEXP repsSEXP, SEXP task_arrival_rateSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -21,13 +21,14 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type threshold(thresholdSEXP);
     Rcpp::traits::input_parameter< int >::type days(daysSEXP);
     Rcpp::traits::input_parameter< int >::type reps(repsSEXP);
-    rcpp_result_gen = Rcpp::wrap(simulate_burnout_cpp(n_tasks, p, threshold, days, reps));
+    Rcpp::traits::input_parameter< double >::type task_arrival_rate(task_arrival_rateSEXP);
+    rcpp_result_gen = Rcpp::wrap(simulate_burnout_cpp(n_tasks, p, threshold, days, reps, task_arrival_rate));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_burnoutTools_simulate_burnout_cpp", (DL_FUNC) &_burnoutTools_simulate_burnout_cpp, 5},
+    {"_burnoutTools_simulate_burnout_cpp", (DL_FUNC) &_burnoutTools_simulate_burnout_cpp, 6},
     {NULL, NULL, 0}
 };
 

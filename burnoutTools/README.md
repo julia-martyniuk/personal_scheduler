@@ -1,15 +1,14 @@
 # burnoutTools
 
-`burnoutTools` is an R package developed as part of a group project for the **Advanced Programming in R** course. It simulates and visualizes burnout risk based on task completion behavior. The simulation is written in C++ via Rcpp, and results are visualized using ggplot2.
-
----
+burnoutTools is an R package made for a group project in the Advanced Programming in R course. It simulates how burnout risk changes over time based on task load, productivity, and fatigue. The simulation uses Monte Carlo methods, and the backend runs in C++ via Rcpp. Visualization is done with ggplot2.
 
 ## Features
 
-* Simulates the probability of burnout over time using a Monte Carlo method
-* Uses C++ for fast computation via Rcpp
-* Includes a simple ggplot2-based function to plot the forecast
-* Designed for integration into Shiny applications
+- Simulates burnout risk over time using Monte Carlo simulations
+- Includes task arrival and completion, fatigue buildup, and burnout risk logic
+- Simulation core written in C++ for speed (via Rcpp)
+- Plots daily burnout risk, fatigue, and pending tasks with ggplot2
+- Can be used in Shiny apps or standalone scripts
 
 ## Installation
 
@@ -19,24 +18,65 @@ This package is not on CRAN. To install it locally:
 devtools::install("path/to/burnoutTools")
 ```
 
-## Example
+## Usage Example
 
 ```r
 library(burnoutTools)
 
-# Simulate burnout with 8 tasks and 60% daily completion chance
-df <- simulate_burnout(n_tasks = 8, p = 0.6)
+# Run simulation with 8 tasks and 60% productivity
+result <- simulate_burnout(n_tasks = 8, p = 0.6)
 
-# Plot the forecast
-plot_burnout_forecast(df)
+# Plot forecast of burnout risk, tasks, and fatigue over 30 days
+plot_burnout_forecast(result)
 ```
 
 ## Functions
 
-* `simulate_burnout()` – runs the burnout simulation
-* `plot_burnout_forecast()` – creates a simple plot with ggplot2
+### simulate_burnout()
+Runs the burnout simulation and returns a data frame.
+
+**Arguments:**
+- `n_tasks`: Number of tasks at the beginning (>= 0)
+- `p`: Productivity rate (between 0 and 1)
+- `threshold`: Burnout threshold (default is 3)
+- `days`: Number of days to simulate (default is 30)
+- `reps`: Number of simulation repetitions (default is 1000)
+- `task_arrival_rate`: Avg daily new tasks (default is 0.5)
+- `seed`: Set seed for reproducibility (default is 123)
+
+**Returns:** A data frame with:
+- Day
+- BurnoutRisk
+- AvgPendingTasks
+- Fatigue
+- Summary_HighRiskDays
+- Summary_PeakRiskDay
+- Summary_MaxFatigue
+
+### plot_burnout_forecast()
+Plots a line graph of the burnout simulation results.
+
+**Arguments:**
+- `df`: The output from `simulate_burnout()`
+
+**Returns:** A ggplot2 line chart showing changes in risk, fatigue, and task load.
+
+## Testing
+
+Make sure your tests expect all 7 columns in the result.
+
+```r
+test_that("simulate_burnout returns correct structure", {
+  df <- simulate_burnout(n_tasks = 5, p = 0.5, threshold = 3, days = 10, reps = 100)
+
+  expect_s3_class(df, "data.frame")
+  expect_equal(ncol(df), 7)
+  expect_true(all(c("Day", "BurnoutRisk", "AvgPendingTasks", "Fatigue",
+                    "Summary_HighRiskDays", "Summary_PeakRiskDay", "Summary_MaxFatigue") %in% colnames(df)))
+  expect_equal(nrow(df), 10)
+})
+```
 
 ## Purpose
 
-This package was created to extend a Shiny-based personal scheduler app by adding a burnout forecast feature. It was also a way for us to apply what I learned about writing R packages and integrating C++ with R through Rcpp.
-
+We made this package to add a burnout prediction feature to a scheduling app built with Shiny. It also helped us practice building R packages with C++ using Rcpp.

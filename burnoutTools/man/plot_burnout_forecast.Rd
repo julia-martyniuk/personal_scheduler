@@ -7,11 +7,13 @@
 plot_burnout_forecast(df)
 }
 \arguments{
-\item{df}{A data frame returned by \code{simulate_burnout()}, with \code{Day} and \code{BurnoutRisk} columns.}
+\item{df}{A data frame returned by simulate_burnout().}
 }
 \value{
-A ggplot2 object.
+A ggplot object displaying burnout risk and task pressure.
 }
 \description{
-Produces a line plot of simulated burnout risk over time.
+This function visualizes the forecasted burnout risk and task load over time.
+It is designed to assist with interpreting simulation output by showing how
+both burnout risk and average pending tasks evolve.
 }
