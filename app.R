@@ -514,83 +514,71 @@ server<- function(input, output, session) {
     ))
   })
   
-# Store simulation results reactively
-df_reactive <- reactiveVal(NULL)
-
-# Count unfinished tasks from schedule data
-auto_task_count <- reactive({
-  req(v$data)
-  unfinished <- v$data %>% filter(state != "done" & state != "cancelled")
-  nrow(unfinished)
-})
-
-# Show task info text based on auto_tasks checkbox
-output$task_info <- renderText({
-  if (isTRUE(input$auto_tasks)) {
-    count <- auto_task_count()
-    if (count == 0) "No pending tasks detected. Using manual input."
-    else paste("Detected", count, "pending task(s).")
-  } else {
-    ""
-  }
-})
-
-# Determine number of tasks for simulation
-sim_n_tasks <- reactive({
-  if (isTRUE(input$auto_tasks)) {
-    count <- auto_task_count()
-    if (count == 0) input$n_tasks else count
-  } else {
-    input$n_tasks
-  }
-})
-
-# Run simulation on button click
-observeEvent(input$simulate_burnout, {
-  if (sim_n_tasks() < 1 || input$forecast_days < 1 || input$forecast_reps < 1) {
-    showModal(modalDialog(title = "Input Error",
-                          "Please ensure all numeric inputs are positive.",
-                          easyClose = TRUE))
-    return()
-  }
+  # Store simulation results reactively
+  df_reactive <- reactiveVal(NULL)
   
-  req(sim_n_tasks(), input$p_success, input$burnout_threshold, input$forecast_days, input$forecast_reps)
+  # Count unfinished tasks from schedule data
+  auto_task_count <- reactive({
+    req(v$data)
+    unfinished <- v$data %>% filter(state != "done" & state != "cancelled")
+    nrow(unfinished)
+  })
   
-  df <- burnoutTools::simulate_burnout(
-    n_tasks = sim_n_tasks(),
-    p = input$p_success / 100,
-    threshold = input$burnout_threshold,
-    days = input$forecast_days,
-    reps = input$forecast_reps
-  )
+  # Show task info text based on auto_tasks checkbox
+  output$task_info <- renderText({
+    if (isTRUE(input$auto_tasks)) {
+      count <- auto_task_count()
+      if (count == 0) "No pending tasks detected. Using manual input."
+      else paste("Detected", count, "pending task(s).")
+    } else {
+      ""
+    }
+  })
   
-  df_reactive(df)
-})
-
-# Plot the simulation results
-output$burnout_plot <- renderPlot({
-  req(df_reactive())
-  df <- df_reactive()
+  # Determine number of tasks for simulation
+  sim_n_tasks <- reactive({
+    if (isTRUE(input$auto_tasks)) {
+      count <- auto_task_count()
+      if (count == 0) input$n_tasks else count
+    } else {
+      input$n_tasks
+    }
+  })
   
-  validate(
-    need(nrow(df) > 0, "No simulation data."),
-    need("pending_tasks" %in% colnames(df), "Missing column 'pending_tasks'."),
-    need("sim" %in% colnames(df), "Missing column 'sim'.")
-  )
+  # Run simulation on button click
+  observeEvent(input$simulate_burnout, {
+    if (sim_n_tasks() < 1 || input$forecast_days < 1 || input$forecast_reps < 1) {
+      showModal(modalDialog(title = "Input Error",
+                            "Please ensure all numeric inputs are positive.",
+                            easyClose = TRUE))
+      return()
+    }
+    
+    req(sim_n_tasks(), input$p_success, input$burnout_threshold, input$forecast_days, input$forecast_reps)
+    
+    df <- burnoutTools::simulate_burnout(
+      n_tasks = sim_n_tasks(),
+      p = input$p_success / 100,
+      threshold = input$burnout_threshold,
+      days = input$forecast_days,
+      reps = input$forecast_reps
+    )
+    
+    df_reactive(df)
+  })
   
-  plot_burnout_forecast(df)
-})
-
-# Show average peak workload summary
-output$peak_gauge_ui <- renderUI({
-  req(df_reactive())
-  df_summary <- df_reactive() %>%
-    group_by(sim) %>%
-    summarise(max_pending = max(pending_tasks), .groups = "drop")
-  
-  avg_peak <- mean(df_summary$max_pending, na.rm = TRUE)
-  HTML(paste0("<b>Average peak workload:</b> ", round(avg_peak, 2), " tasks"))
-})
+  # Plot the simulation results
+  output$burnout_plot <- renderPlot({
+    req(df_reactive())
+    df <- df_reactive()
+    
+    validate(
+      need("Day" %in% colnames(df), "Simulation must return a 'Day' column."),
+      need("BurnoutRisk" %in% colnames(df), "Simulation must return a 'BurnoutRisk' column.")
+    )
+    
+    burnoutTools::plot_burnout_forecast(df)
+  })
 
   ## Filter data for plot ##
   
