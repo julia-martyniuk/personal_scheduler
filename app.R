@@ -1,4 +1,6 @@
-# Load R packages 
+####################################
+# Load packages                    #
+####################################
 # install.packages("reactable")
 # install.packages("RSQLite")
 # install.packages("shinyalert")
@@ -17,6 +19,7 @@ library(shinyalert)
 library(bslib)
 library(burnoutTools) # custom package which contains C++ implementations via Rcpp
 library(shinycssloaders)
+
 ####################################
 # Define classes                   #
 ####################################
@@ -98,13 +101,12 @@ setState.Deadline <- function(x, state, note = "") {
 # Define defensive functions       #
 ####################################
 
-validate_note <- function(note){
+validate_note <- function(note) {
   if (!is.character(note)) {
     stop("Note must be a string.")
   }
   
   if (nchar(note) > 60){
-    print("There is more than 60 characters")
     stop("Note must not exceed 60 characters")
   }
   return(TRUE)
@@ -129,10 +131,10 @@ subjects <- dbGetQuery(db, "SELECT name FROM course")
 ####################################
 ui <- navbarPage("Personal Scheduler",
                  theme = bs_theme(version = 5, bootswatch = "cerulean"),
+                 
                  tabPanel("Current Schedule",          
                           fluidPage(
-                            useShinyalert(),
-                            # theme = shinytheme("flatly"),
+                            useShinyalert(force=TRUE),
                             h2('My deadlines'),
                             fluidRow(
                               column(width = 3,
@@ -152,6 +154,7 @@ ui <- navbarPage("Personal Scheduler",
                                          
                                          actionButton("addbutton", "Add new deadline",
                                                       class = "btn btn-primary"),
+                                         
                                          actionButton("extractbutton", "Extract to csv",
                                                       class = "btn btn-secondary")),
                                      tags$hr(),
@@ -161,20 +164,22 @@ ui <- navbarPage("Personal Scheduler",
                                          selectInput("cr_state", label = "Current state", 
                                                      choices = statuses, 
                                                      selected = NULL),
+                                         
                                          textInput("new_note", label = "Leave a note", 
                                                    placeholder = "max 60 symbols"),
                                          
                                          actionButton("updateselected", "Update selected item",
-                                                      class = "btn btn-primary" ), 
+                                                      class = "btn btn-primary"), 
+                                         
                                          actionButton("deletebutton", "Delete",
                                                       class = "btn btn-warning"))),
                               
                               column(width = 9,reactableOutput("new_deadline")),
                               verbatimTextOutput("selected")
                             ))),
+                 
                  tabPanel("Progress",
                           fluidPage(
-                            # theme = shinytheme("flatly"),
                             h2("Check your progress"),
                             fluidRow(
                               column(width = 3,
@@ -187,12 +192,13 @@ ui <- navbarPage("Personal Scheduler",
                               column(width = 9,plotOutput("progress_plot")))
                             
                           )), 
+                 
                  tabPanel("Forecast",
                           fluidPage(
                             h2("Burnout Forecast"),
                             
                             p("This tool estimates how your workload, fatigue, and burnout risk may evolve in the next few weeks. 
-             The model simulates how task pressure and recovery interact over time."),
+                               The model simulates how task pressure and recovery interact over time."),
                             
                             tags$details(
                               tags$summary("How the model works"),
@@ -245,10 +251,9 @@ ui <- navbarPage("Personal Scheduler",
                                 br(),
                                 uiOutput("peak_gauge_ui"),
                                 helpText("Note: The shaded area on the plot highlights days when estimated burnout risk is high (above 0.7). 
-                        Fatigue reduces your productivity over time when you're overloaded. 
-                        Use this forecast to reflect on whether your pace is manageable.")
-                              )
-                            )
+                                          Fatigue reduces your productivity over time when you're overloaded. 
+                                          Use this forecast to reflect on whether your pace is manageable.")
+                              ))
                           )
                  )
 )
@@ -260,7 +265,7 @@ ui <- navbarPage("Personal Scheduler",
 
 server<- function(input, output, session) {
   
-  # Plot update trigger
+  ## Plot update trigger  ##
   plot_trigger <- reactiveVal(0)
   
   ## Welcome alert ##
@@ -303,6 +308,7 @@ server<- function(input, output, session) {
   
   
   ## Build a schedule ##
+  # — vectorised update start —
   v <- reactiveValues()
   
   v$data <- dbGetQuery(db, '
@@ -321,22 +327,11 @@ server<- function(input, output, session) {
   
   
   selected <- reactive(getReactableState("new_deadline", "selected"))
-  
+  # — vectorised update end —
   
   ## Add new deadline ##
-  
   observeEvent(input$addbutton,{
     req(input$subject, input$task, input$deadline_date)
-    
-    print('Add Button clicked...')
-    
-    # validate(
-    #   need(input$subject != "", "Please select a subject."),
-    #   need(input$task != "", "Please select a task."),
-    #   need(!is.null(input$deadline_date) && input$deadline_date != "", "Please select a deadline date.")
-    # )
-    
-    showNotification("New deadline saved")
     
     course_id <- dbGetQuery(db, "SELECT course_id FROM course WHERE name = ?", 
                             params = list(input$subject))$course_id
@@ -349,8 +344,8 @@ server<- function(input, output, session) {
     ects <- if (nrow(selected_subject) > 0) {selected_subject$ects}
     
     priority_d <- if (ects < 3) {3}
-    else if (ects < 5) {2}
-    else {1}
+                  else if (ects < 5) {2}
+                  else {1}
     
     dbExecute(
       db,
@@ -366,34 +361,29 @@ server<- function(input, output, session) {
                   JOIN state s ON d.state_id = s.state_id
                   WHERE d.is_deleted = 0')
     
+    showNotification("New deadline saved")
+    
     # Re-render the plot after adding a new record
     plot_trigger(plot_trigger() + 1)
   })
   
   ## Extract schedule to csv file ##
-  observeEvent(input$extractbutton,{
-    
-    print('Extract Button clicked...')
-    
+  observeEvent(input$extractbutton, {
     write.table(v$data,
                 file = "deadlines.csv",
                 sep = ",",
                 append = FALSE,
                 quote = TRUE,
                 col.names = colnames(v$data),
-                row.names = FALSE)
-    
-  })
+                row.names = FALSE)}
+  )
   
   ## Update deadline item ##
   observeEvent(input$updateselected, {
     
-    print('Update Button clicked...')
-    showNotification("Deadline successfully updated")
-    
     req(input$cr_state)
     
-    # Defensive validation for the note field
+    # Validation for the note field
     is_note_correct <- tryCatch({
       validate_note(input$new_note)
       TRUE
@@ -411,14 +401,14 @@ server<- function(input, output, session) {
       return()
     }
     
-    state_id <- dbGetQuery(db, "SELECT state_id FROM state WHERE name = ?", 
+    state_id <- dbGetQuery(db, 
+                           "SELECT state_id FROM state WHERE name = ?", 
                            params = list(input$cr_state))$state_id
     
-    # — VECTORISED UPDATE START —
+    # — vectorised update start —
     ids <- sorted_by_deadlines()$deadline_id[selected()]
     if (length(ids)) {
       ph <- paste(rep("?", length(ids)), collapse = ",")
-      # params <- c(list(input$cr_state, input$new_note), as.list(ids))
       params <- c(list(state_id, input$new_note), as.list(ids))
       dbExecute(
         db,
@@ -431,7 +421,7 @@ server<- function(input, output, session) {
         params = params
       )
     }
-    # — VECTORISED UPDATE END —
+    # — vectorised update end —
     
     v$data <- dbGetQuery(db, '
                   SELECT d.deadline_id, c.name AS subject, t.name AS task, d.date AS deadline_date, d.priority, s.name AS state, d.note
@@ -441,6 +431,8 @@ server<- function(input, output, session) {
                   JOIN state s ON d.state_id = s.state_id
                   WHERE d.is_deleted = 0')
     
+    showNotification("Deadline successfully updated")
+    
     # Re-render the plot after updating a record
     plot_trigger(plot_trigger() + 1)
   })
@@ -448,10 +440,7 @@ server<- function(input, output, session) {
   
   ## Delete deadline item ##
   observeEvent(input$deletebutton, {
-    
-    print('Delete button clicked...')
-    showNotification("Deadline deleted")
-    
+
     # collect all selected IDs
     ids <- sorted_by_deadlines()$deadline_id[selected()]
     
@@ -478,6 +467,8 @@ server<- function(input, output, session) {
                   JOIN task t ON d.task_id = t.task_id
                   JOIN state s ON d.state_id = s.state_id
                   WHERE d.is_deleted = 0')
+    
+    showNotification("Deadline deleted")
     
     # Re-render the plot after deleting a record
     plot_trigger(plot_trigger() + 1)
@@ -626,9 +617,8 @@ server<- function(input, output, session) {
   })
 
   ## Filter data for plot ##
-  
+  # — vectorised update start —
   filtered_deadlines <- reactive({
-    # req (v$data)
     
     # Trigger dependency
     plot_trigger()
@@ -640,41 +630,35 @@ server<- function(input, output, session) {
                   JOIN task t ON d.task_id = t.task_id
                   JOIN state s ON d.state_id = s.state_id
                   WHERE d.is_deleted = 0')    %>%
-      # df_filtered <- v$data %>%
       mutate(
         deadline_date = as.Date(deadline_date),
         month         = factor(format(deadline_date, "%b"),
                                levels = month.abb)
       )
-    cat("Original row count:", nrow(df_filtered), "\n")
     
     if (length(input$prog_subject) > 0) {
       df_filtered <- df_filtered %>% filter(subject %in% input$prog_subject)
-      # cat("After subject filter:", nrow(df_filtered), "\n")
     }
     if (length(input$prog_task) > 0) {
       df_filtered <- df_filtered %>% filter(task %in% input$prog_task)
-      # cat("After task filter:", nrow(df_filtered), "\n")
     }
     if (length(input$prog_state) > 0) {
       df_filtered <- df_filtered %>% filter(state %in% input$prog_state)
-      # cat("After state filter:", nrow(df_filtered), "\n")
     }
     if (nzchar(input$prog_month)) {
       df_filtered <- df_filtered %>% filter(month == input$prog_month)
-      # cat("After month filter:", nrow(df_filtered), "\n")
     }
     df_filtered
   })
-  
+  # — vectorised update end —
   
   ## Render plot ##
+  # — vectorised update start —
   output$progress_plot <- renderPlot({
     
     df_plot <- filtered_deadlines()
     
-    if (nrow(df_plot) == 0) {
-      return(NULL)}
+    if (nrow(df_plot) == 0) {return(NULL)}
     
     df_plot$state <- as.character(df_plot$state)
     
@@ -687,21 +671,10 @@ server<- function(input, output, session) {
       labs(title = "Task Count by State", x = "Month", y = "Number of Tasks") +
       theme_minimal()
   })
+  # — vectorised update end —
+  
 }
 
-
-# Test outputs and button behavior 
-# observe({
-#   print(v$data)
-# })
-# 
-# output$selected <- renderPrint({
-#   print(selected())
-# })
-# 
-# observe({
-#   print(v$data[selected(), ])
-# })
 
 ####################################
 # Create the shiny app             #
