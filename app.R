@@ -3,6 +3,7 @@
 # install.packages("RSQLite")
 # install.packages("shinyalert")
 # devtools::load_all("burnoutTools")
+# install.packages("shinycssloaders")
 
 library(shiny)
 library(shinythemes)
@@ -15,7 +16,7 @@ library(ggplot2)
 library(shinyalert) 
 library(bslib)
 library(burnoutTools) # custom package which contains C++ implementations via Rcpp
-
+library(shinycssloaders)
 ####################################
 # Define classes                   #
 ####################################
