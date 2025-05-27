@@ -1,3 +1,6 @@
+# This test checks whether the simulate_burnout() function returns a correct structure
+# and valid values. It ensures the reliability of our burnout risk simulation logic.
+
 test_that("simulate_burnout returns expected structure and content", {
   df <- simulate_burnout(
     n_tasks = 5,
