@@ -28,9 +28,19 @@ Managing multiple deadlines is stressful, especially for students balancing subj
 install.packages(c(
   "shiny", "shinythemes", "reactable", "bslib", 
   "RSQLite", "DBI", "dplyr", "ggplot2", 
-  "shinyalert", "shinycssloaders"
+  "shinyalert", "shinycssloaders", "burnoutTools"
 ))
 ```
+
+# Topics covered from the course
+This project was developed as part of the „Advanced programming in R” course and integrates several key topics covered during the semester. 
+Specifically, it demonstrates practical application of: <br>
+1. Advanced R functions and defensive programming: applied for input validation and error handling.<br>
+2. Custom S3 class implementation: used to define a `Deadline` object to manage task data.<br>
+3. Integration of C++ via Rcpp: used in the custom ***burnoutTools*** package to support simulation functions.<br>
+4. Code vectorization – optimizing data processing and UI responses by applying vectorized operations in the server logic.<br>
+5. Development of Shiny applications – building a reactive, multi-tab dashboard interface for scheduling, progress tracking, and burnout forecasting.<br>
+6. Custom R package – the simulation logic is bundled into a separate R package ***burnoutTools***.<br>
 
 # Code functionality 
 ## Custom Classes and Methods
